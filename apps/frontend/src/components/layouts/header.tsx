@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/components/providers/theme-provider';
+import { useSearchSuggestions } from '@/lib/api/hooks/use-search';
 
 export function Header() {
   const { user, isAuthenticated, isLoading, logout, isLoggingOut } = useAuth();
@@ -12,12 +13,28 @@ export function Header() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLDivElement>(null);
+
+  const { data: suggestions, isLoading: isLoadingSuggestions } = useSearchSuggestions(searchQuery);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Implement search functionality
-    console.log('Search:', searchQuery);
+    if (searchQuery.trim().length >= 2) {
+      // Navigate to first suggestion if available, otherwise do nothing
+      if (suggestions && suggestions.length > 0) {
+        router.push(`/books/${suggestions[0].slug}`);
+        setSearchQuery('');
+        setShowSuggestions(false);
+      }
+    }
+  };
+
+  const handleSuggestionClick = (slug: string) => {
+    router.push(`/books/${slug}`);
+    setSearchQuery('');
+    setShowSuggestions(false);
   };
 
   // Close dropdown when clicking outside
@@ -26,16 +43,19 @@ export function Header() {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsDropdownOpen(false);
       }
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
     };
 
-    if (isDropdownOpen) {
+    if (isDropdownOpen || showSuggestions) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isDropdownOpen]);
+  }, [isDropdownOpen, showSuggestions]);
 
   const handleLogout = async () => {
     try {
@@ -49,27 +69,81 @@ export function Header() {
   return (
     <header className="sticky top-0 z-50 w-full h-[60px] flex items-center justify-between px-3 md:px-6 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800 transition-colors duration-300">
       {/* Search Bar */}
-      <form onSubmit={handleSearch} className="flex-1 max-w-md mr-2 md:mr-4">
-        <div className="relative flex items-center gap-2 md:gap-3">
-          <button
-            type="submit"
-            className="w-[24px] h-[24px] md:w-[30px] md:h-[30px] flex items-center justify-center text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors duration-300 flex-shrink-0"
-            aria-label="Tìm kiếm"
-          >
-            <svg width="24" height="24" className="md:w-[30px] md:h-[30px]" viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M14.375 4C20.105 4 24.75 8.64505 24.75 14.375C24.75 20.105 20.105 24.75 14.375 24.75C8.64505 24.75 4 20.105 4 14.375C4 8.64505 8.64505 4 14.375 4Z" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M27.5 27.5L25 25" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Tìm kiếm..."
-            className="flex-1 h-[30px] bg-transparent border-none outline-none text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 text-xs md:text-sm transition-colors duration-300"
-          />
-        </div>
-      </form>
+      <div ref={searchRef} className="flex-1 max-w-md mr-2 md:mr-4 relative">
+        <form onSubmit={handleSearch}>
+          <div className="relative flex items-center gap-2 md:gap-3">
+            <button
+              type="submit"
+              className="w-[24px] h-[24px] md:w-[30px] md:h-[30px] flex items-center justify-center text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors duration-300 flex-shrink-0"
+              aria-label="Tìm kiếm"
+            >
+              <svg width="24" height="24" className="md:w-[30px] md:h-[30px]" viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M14.375 4C20.105 4 24.75 8.64505 24.75 14.375C24.75 20.105 20.105 24.75 14.375 24.75C8.64505 24.75 4 20.105 4 14.375C4 8.64505 8.64505 4 14.375 4Z" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M27.5 27.5L25 25" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setShowSuggestions(true);
+              }}
+              onFocus={() => {
+                if (searchQuery.trim().length >= 2) {
+                  setShowSuggestions(true);
+                }
+              }}
+              placeholder="Tìm kiếm truyện..."
+              className="flex-1 h-[30px] bg-transparent border-none outline-none text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 text-xs md:text-sm transition-colors duration-300"
+            />
+          </div>
+        </form>
+
+        {/* Suggestions Dropdown */}
+        {showSuggestions && searchQuery.trim().length >= 2 && (
+          <div className="absolute z-50 w-full mt-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 max-h-[300px] overflow-y-auto">
+            {isLoadingSuggestions ? (
+              <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                Đang tải...
+              </div>
+            ) : suggestions && suggestions.length > 0 ? (
+              <div className="p-2">
+                <div className="text-xs text-gray-500 dark:text-gray-400 px-2 py-1">Gợi ý</div>
+                {suggestions.map((suggestion) => (
+                  <button
+                    key={suggestion.id}
+                    onClick={() => handleSuggestionClick(suggestion.slug)}
+                    className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors flex items-center gap-3"
+                  >
+                    {suggestion.coverImage && (
+                      <img
+                        src={suggestion.coverImage}
+                        alt={suggestion.title}
+                        className="w-10 h-14 object-cover rounded flex-shrink-0"
+                      />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                        {suggestion.title}
+                      </div>
+                      {suggestion.authorName && (
+                        <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                          {suggestion.authorName}
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                Không tìm thấy gợi ý
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Right Side: Theme Toggle, User Info, Notification */}
       <div className="flex items-center gap-1.5 md:gap-4">

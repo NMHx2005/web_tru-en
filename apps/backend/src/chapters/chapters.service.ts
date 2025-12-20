@@ -9,15 +9,21 @@ import { CreateChapterDto } from './dto/create-chapter.dto';
 import { UpdateChapterDto } from './dto/update-chapter.dto';
 import { generateSlug, generateUniqueSlug } from '../common/utils/slug.util';
 import { chapterWithStoryInclude } from '../prisma/prisma.helpers';
-import { UserRole } from '@prisma/client';
+import { UserRole, ApprovalType, ApprovalStatus } from '@prisma/client';
+import { ApprovalsService } from '../approvals/approvals.service';
+import { getPaginationParams, createPaginatedResult } from '../common/utils/pagination.util';
 
 @Injectable()
 export class ChaptersService {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private prisma: PrismaService,
+        private approvalsService: ApprovalsService
+    ) { }
 
     async findAll(storyId: string, includeUnpublished: boolean = false) {
         const story = await this.prisma.story.findUnique({
             where: { id: storyId },
+            select: { id: true },
         });
 
         if (!story) {
@@ -49,6 +55,7 @@ export class ChaptersService {
         // Find story first
         const story = await this.prisma.story.findUnique({
             where: { slug: storySlug },
+            select: { id: true, authorId: true, isPublished: true },
         });
 
         if (!story) {
@@ -101,12 +108,14 @@ export class ChaptersService {
         // Check if storyIdOrSlug is an ID or slug
         let story = await this.prisma.story.findUnique({
             where: { id: storyIdOrSlug },
+            select: { id: true, authorId: true },
         });
 
         if (!story) {
             // Try as slug
             story = await this.prisma.story.findUnique({
                 where: { slug: storyIdOrSlug },
+                select: { id: true, authorId: true },
             });
         }
 
@@ -181,7 +190,16 @@ export class ChaptersService {
     ) {
         const chapter = await this.prisma.chapter.findUnique({
             where: { id },
-            include: { story: true },
+            select: {
+                id: true,
+                storyId: true,
+                story: {
+                    select: {
+                        id: true,
+                        authorId: true,
+                    },
+                },
+            },
         });
 
         if (!chapter) {
@@ -239,7 +257,15 @@ export class ChaptersService {
     async remove(id: string, userId: string, userRole: UserRole) {
         const chapter = await this.prisma.chapter.findUnique({
             where: { id },
-            include: { story: true },
+            select: {
+                id: true,
+                story: {
+                    select: {
+                        id: true,
+                        authorId: true,
+                    },
+                },
+            },
         });
 
         if (!chapter) {
@@ -260,7 +286,17 @@ export class ChaptersService {
     async publish(id: string, userId: string) {
         const chapter = await this.prisma.chapter.findUnique({
             where: { id },
-            include: { story: true },
+            select: {
+                id: true,
+                title: true,
+                isPublished: true,
+                story: {
+                    select: {
+                        id: true,
+                        authorId: true,
+                    },
+                },
+            },
         });
 
         if (!chapter) {
@@ -268,19 +304,60 @@ export class ChaptersService {
         }
 
         // Check permission - chỉ author của story mới có thể request publish
-        // Thực tế publish sẽ được thực hiện bởi admin sau khi duyệt
         if (chapter.story.authorId !== userId) {
+            const user = await this.prisma.user.findUnique({ where: { id: userId } });
+            // Admin can publish directly
+            if (user && user.role === UserRole.ADMIN) {
+                return this.prisma.chapter.update({
+                    where: { id },
+                    data: {
+                        isPublished: true,
+                    },
+                    include: chapterWithStoryInclude,
+                });
+            }
             throw new ForbiddenException('Bạn chỉ có thể yêu cầu publish chương của chính mình');
         }
 
-        // Author không thể tự publish, phải tạo approval request
-        // Method này sẽ được thay thế bằng approval request system
-        throw new BadRequestException('Để publish chương, vui lòng gửi yêu cầu phê duyệt. Chỉ admin mới có thể publish.');
+        // Check if chapter is already published
+        if (chapter.isPublished) {
+            throw new BadRequestException('Chương này đã được xuất bản');
+        }
+
+        // Check if there's already a pending approval request
+        const existingRequest = await this.prisma.approvalRequest.findFirst({
+            where: {
+                userId,
+                chapterId: id,
+                status: ApprovalStatus.PENDING,
+            },
+        });
+
+        if (existingRequest) {
+            throw new BadRequestException('Bạn đã có yêu cầu phê duyệt đang chờ xử lý cho chương này');
+        }
+
+        // Create approval request for author
+        const approvalRequest = await this.approvalsService.createRequest(
+            userId,
+            null,
+            id,
+            {
+                type: ApprovalType.CHAPTER_PUBLISH,
+                message: `Yêu cầu xuất bản chương: ${chapter.title}`,
+            }
+        );
+
+        return {
+            message: 'Yêu cầu xuất bản đã được gửi thành công. Vui lòng chờ admin phê duyệt.',
+            approvalRequest,
+        };
     }
 
     async incrementViewCount(storySlug: string, chapterSlug: string) {
         const story = await this.prisma.story.findUnique({
             where: { slug: storySlug },
+            select: { id: true },
         });
 
         if (!story) {
@@ -304,6 +381,134 @@ export class ChaptersService {
                 },
             });
         }
+    }
+
+    async findAllForAdmin(params?: {
+        page?: number;
+        limit?: number;
+        search?: string;
+        storyId?: string;
+        isPublished?: boolean;
+        sortBy?: 'createdAt' | 'updatedAt' | 'viewCount' | 'order' | 'title';
+        sortOrder?: 'asc' | 'desc';
+    }) {
+        const { page: pageNum, limit: limitNum, skip } = getPaginationParams({
+            page: params?.page,
+            limit: params?.limit,
+        });
+
+        const where: any = {};
+
+        if (params?.search) {
+            where.OR = [
+                { title: { contains: params.search, mode: 'insensitive' } },
+                { slug: { contains: params.search, mode: 'insensitive' } },
+            ];
+        }
+
+        if (params?.storyId) {
+            where.storyId = params.storyId;
+        }
+
+        if (params?.isPublished !== undefined) {
+            where.isPublished = params.isPublished;
+        }
+
+        const orderBy: any = {};
+        if (params?.sortBy) {
+            orderBy[params.sortBy] = params.sortOrder || 'desc';
+        } else {
+            orderBy.createdAt = 'desc';
+        }
+
+        const [chapters, total] = await Promise.all([
+            this.prisma.chapter.findMany({
+                where,
+                include: {
+                    story: {
+                        select: {
+                            id: true,
+                            title: true,
+                            slug: true,
+                            coverImage: true,
+                        },
+                    },
+                    uploader: {
+                        select: {
+                            id: true,
+                            username: true,
+                            displayName: true,
+                            avatar: true,
+                        },
+                    },
+                },
+                orderBy,
+                skip,
+                take: limitNum,
+            }),
+            this.prisma.chapter.count({ where }),
+        ]);
+
+        return createPaginatedResult(chapters, total, pageNum, limitNum);
+    }
+
+    async getChaptersStats() {
+        const [
+            total,
+            published,
+            draft,
+            totalViews,
+        ] = await Promise.all([
+            this.prisma.chapter.count(),
+            this.prisma.chapter.count({ where: { isPublished: true } }),
+            this.prisma.chapter.count({ where: { isPublished: false } }),
+            this.prisma.chapter.aggregate({
+                _sum: { viewCount: true },
+            }),
+        ]);
+
+        return {
+            total,
+            published,
+            draft,
+            totalViews: totalViews._sum.viewCount || 0,
+        };
+    }
+
+    async getChaptersChartData(days: number = 30) {
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days);
+
+        const chapters = await this.prisma.chapter.findMany({
+            where: {
+                createdAt: { gte: startDate },
+            },
+            select: {
+                createdAt: true,
+            },
+            orderBy: {
+                createdAt: 'asc',
+            },
+        });
+
+        // Group by date
+        const grouped: { [key: string]: number } = {};
+        chapters.forEach((chapter) => {
+            const date = new Date(chapter.createdAt).toLocaleDateString('vi-VN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+            });
+            grouped[date] = (grouped[date] || 0) + 1;
+        });
+
+        const labels = Object.keys(grouped).sort();
+        const data = labels.map((label) => grouped[label]);
+
+        return {
+            labels,
+            data,
+        };
     }
 }
 

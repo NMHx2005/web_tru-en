@@ -2,16 +2,20 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/api/hooks/use-auth';
+import { useSettings } from '@/lib/api/hooks/use-settings';
 
 export function Sidebar() {
   const pathname = usePathname();
   const { user } = useAuth();
+  const { data: settings } = useSettings();
   const isHome = pathname === '/';
   const isProfile = pathname === '/profile';
   const isHistory = pathname === '/history';
   const isFavorites = pathname === '/favorites';
+  const isFollows = pathname === '/follows';
   const isAuthorDashboard = pathname?.startsWith('/author/dashboard');
   const isChapterManagement = pathname?.includes('/author/stories/') && pathname?.includes('/chapters');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -30,24 +34,36 @@ export function Sidebar() {
             href="/"
             className="w-[60px] h-[60px] flex items-center justify-center transition-transform duration-300 hover:scale-110 active:scale-95"
           >
-            <svg width="60" height="60" viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path
-                d="M50 5L50 55L30 45.3594L10 55L10 5L50 5Z"
-                stroke="currentColor"
-                strokeWidth="4.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="text-gray-900 dark:text-white transition-colors duration-300"
-              />
-              <path
-                d="M30 5V45.3594"
-                stroke="currentColor"
-                strokeWidth="4.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="text-gray-900 dark:text-white transition-colors duration-300"
-              />
-            </svg>
+            {settings?.siteLogo ? (
+              <div className="relative w-full h-full">
+                <Image
+                  src={settings.siteLogo}
+                  alt={settings.siteName || 'Logo'}
+                  fill
+                  className="object-contain"
+                  priority
+                />
+              </div>
+            ) : (
+              <svg width="60" height="60" viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path
+                  d="M50 5L50 55L30 45.3594L10 55L10 5L50 5Z"
+                  stroke="currentColor"
+                  strokeWidth="4.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="text-gray-900 dark:text-white transition-colors duration-300"
+                />
+                <path
+                  d="M30 5V45.3594"
+                  stroke="currentColor"
+                  strokeWidth="4.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="text-gray-900 dark:text-white transition-colors duration-300"
+                />
+              </svg>
+            )}
           </Link>
 
           {/* Navigation Items */}
@@ -108,6 +124,32 @@ export function Sidebar() {
               </svg>
             </Link>
 
+            {/* Follows */}
+            <Link
+              href="/follows"
+              className={`w-[50px] h-[50px] flex items-center justify-center rounded-[10px] transition-all duration-300 hover:scale-110 active:scale-95 ${isFollows
+                ? 'bg-red-500 dark:bg-red-600'
+                : 'bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+              aria-label="Đang theo dõi"
+            >
+              <svg
+                width="30"
+                height="30"
+                viewBox="0 0 40 40"
+                fill="none"
+                className={isFollows ? 'text-white' : 'text-gray-900 dark:text-white transition-colors duration-300'}
+              >
+                <path
+                  d="M20 6.66667L6.66667 13.3333V26.6667L20 33.3333L33.3333 26.6667V13.3333L20 6.66667Z"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  fill={isFollows ? 'currentColor' : 'none'}
+                />
+              </svg>
+            </Link>
+
             {/* Favorites */}
             <Link
               href="/favorites"
@@ -129,7 +171,7 @@ export function Sidebar() {
                   strokeWidth="2.5"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  fill="none"
+                  fill={isFavorites ? 'currentColor' : 'none'}
                 />
               </svg>
             </Link>
@@ -298,6 +340,32 @@ export function Sidebar() {
               />
             </svg>
             <span className={`text-[10px] font-medium ${isHistory ? 'text-white' : 'text-gray-600 dark:text-gray-400'}`}>Lịch sử</span>
+          </Link>
+
+          <Link
+            href="/follows"
+            className={`flex flex-col items-center justify-center gap-1 w-16 h-14 rounded-lg transition-all duration-300 ${isFollows
+              ? 'bg-red-500 dark:bg-red-600'
+              : 'bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+            aria-label="Đang theo dõi"
+          >
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 40 40"
+              fill="none"
+              className={isFollows ? 'text-white' : 'text-gray-900 dark:text-white transition-colors duration-300'}
+            >
+              <path
+                d="M20 6.66667L6.66667 13.3333V26.6667L20 33.3333L33.3333 26.6667V13.3333L20 6.66667Z"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                fill={isFollows ? 'currentColor' : 'none'}
+              />
+            </svg>
+            <span className={`text-[10px] font-medium ${isFollows ? 'text-white' : 'text-gray-600 dark:text-gray-400'}`}>Theo dõi</span>
           </Link>
 
           <Link

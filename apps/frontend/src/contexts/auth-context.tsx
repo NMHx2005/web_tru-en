@@ -25,6 +25,7 @@ interface AuthContextType {
     confirmPassword: string;
     displayName?: string;
   }) => Promise<void>;
+  updateEmail: (email: string) => Promise<void>;
   isLoggingIn: boolean;
   isRegistering: boolean;
   isLoggingOut: boolean;
@@ -40,6 +41,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loginAsync: loginFn,
     logoutAsync: logoutFn,
     registerAsync: registerFn,
+    updateEmail: updateEmailFn,
     isLoggingIn,
     isRegistering,
     isLoggingOut,
@@ -63,6 +65,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await registerFn(data);
   };
 
+  const updateEmail = async (email: string) => {
+    await updateEmailFn(email);
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -72,6 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         logout,
         register,
+        updateEmail,
         isLoggingIn,
         isRegistering,
         isLoggingOut,

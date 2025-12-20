@@ -11,7 +11,7 @@ import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class CookieInterceptor implements NestInterceptor {
-  constructor(private configService: ConfigService) {}
+  constructor(private configService: ConfigService) { }
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const response = context.switchToHttp().getResponse<Response>();
@@ -19,6 +19,11 @@ export class CookieInterceptor implements NestInterceptor {
 
     return next.handle().pipe(
       map((data) => {
+        // Handle case where data is undefined (e.g., redirect responses)
+        if (!data) {
+          return data;
+        }
+
         // Set HTTP-only cookies for tokens
         if (data?.accessToken) {
           response.cookie('access_token', data.accessToken, {

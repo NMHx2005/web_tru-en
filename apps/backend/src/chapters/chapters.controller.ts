@@ -6,6 +6,7 @@ import {
     Delete,
     Body,
     Param,
+    Query,
     UseGuards,
     NotFoundException,
 } from '@nestjs/common';
@@ -15,6 +16,8 @@ import { UpdateChapterDto } from './dto/update-chapter.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserRole } from '@prisma/client';
 
@@ -31,6 +34,10 @@ export class ChaptersController {
         // First find story by slug to get ID
         const story = await this.prisma.story.findUnique({
             where: { slug: storySlug },
+            select: {
+                id: true,
+                authorId: true,
+            },
         });
         if (!story) {
             throw new NotFoundException('Truyện không tồn tại');
@@ -90,6 +97,44 @@ export class ChaptersController {
     @UseGuards(JwtAuthGuard)
     publish(@Param('id') id: string, @CurrentUser() user: any) {
         return this.chaptersService.publish(id, user.id);
+    }
+}
+
+@Controller('admin/chapters')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN)
+export class AdminChaptersController {
+    constructor(private readonly chaptersService: ChaptersService) {}
+
+    @Get()
+    async getAllChapters(
+        @Query('page') page?: string,
+        @Query('limit') limit?: string,
+        @Query('search') search?: string,
+        @Query('storyId') storyId?: string,
+        @Query('isPublished') isPublished?: string,
+        @Query('sortBy') sortBy?: string,
+        @Query('sortOrder') sortOrder?: 'asc' | 'desc'
+    ) {
+        return this.chaptersService.findAllForAdmin({
+            page: page ? parseInt(page) : undefined,
+            limit: limit ? parseInt(limit) : undefined,
+            search,
+            storyId,
+            isPublished: isPublished === 'true' ? true : isPublished === 'false' ? false : undefined,
+            sortBy: sortBy as any,
+            sortOrder: sortOrder || 'desc',
+        });
+    }
+
+    @Get('stats')
+    async getChaptersStats() {
+        return this.chaptersService.getChaptersStats();
+    }
+
+    @Get('chart-data')
+    async getChaptersChartData(@Query('days') days?: string) {
+        return this.chaptersService.getChaptersChartData(days ? parseInt(days) : 30);
     }
 }
 

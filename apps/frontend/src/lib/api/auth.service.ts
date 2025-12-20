@@ -82,5 +82,10 @@ export const authService = {
     const response = await apiClient.post('/auth/change-password', data);
     return response.data;
   },
+
+  updateEmail: async (email: string): Promise<ApiResponse<{ user: AuthResponse['user'] }>> => {
+    const response = await apiClient.post<{ user: AuthResponse['user'] }>('/auth/update-email', { email });
+    return response.data;
+  },
 };
 

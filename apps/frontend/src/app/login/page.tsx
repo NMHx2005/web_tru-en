@@ -5,11 +5,13 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/components/providers/theme-provider';
+import { useSettings } from '@/lib/api/hooks/use-settings';
 
 export default function LoginPage() {
   const router = useRouter();
   const { login, isLoggingIn } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const { data: settings } = useSettings();
   const [formData, setFormData] = useState({
     emailOrUsername: '',
     password: '',
@@ -363,16 +365,18 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Register Link */}
-          <p className="text-center text-base text-gray-900 dark:text-white transition-colors duration-300">
-            Chưa có tài khoản?{' '}
-            <Link
-              href="/register"
-              className="font-medium text-blue-500 dark:text-blue-400 hover:underline transition-all duration-300 hover:text-blue-600 dark:hover:text-blue-300"
-            >
-              Đăng ký ngay
-            </Link>
-          </p>
+          {/* Register Link - Only show if registration is allowed */}
+          {settings?.allowRegistration !== false && (
+            <p className="text-center text-base text-gray-900 dark:text-white transition-colors duration-300">
+              Chưa có tài khoản?{' '}
+              <Link
+                href="/register"
+                className="font-medium text-blue-500 dark:text-blue-400 hover:underline transition-all duration-300 hover:text-blue-600 dark:hover:text-blue-300"
+              >
+                Đăng ký ngay
+              </Link>
+            </p>
+          )}
         </div>
       </div>
     </div>

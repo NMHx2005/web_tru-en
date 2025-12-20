@@ -33,7 +33,7 @@ import { PrismaModule } from '../prisma/prisma.module';
     GoogleStrategy,
     FacebookStrategy,
   ],
-  exports: [AuthService],
+  exports: [AuthService, JwtModule],
 })
-export class AuthModule {}
+export class AuthModule { }
 

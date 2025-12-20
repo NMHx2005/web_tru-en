@@ -89,8 +89,8 @@ class ApiClient {
               return this.client(originalRequest);
             }
           } catch (refreshError) {
-            // Refresh failed, only redirect if not an auth check endpoint
-            if (typeof window !== 'undefined' && !isAuthCheckEndpoint) {
+            // Refresh failed, only redirect if not an auth endpoint
+            if (typeof window !== 'undefined' && !isAuthEndpoint) {
               // Only redirect if we're not already on login page
               if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
                 window.location.href = '/login';

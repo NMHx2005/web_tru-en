@@ -10,6 +10,7 @@ import { usersService } from '@/lib/api/users.service';
 import { authService } from '@/lib/api/auth.service';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
+import { UserStats } from '@/components/users/user-stats';
 
 interface ProfileFormData {
   email: string;
@@ -24,7 +25,7 @@ interface PasswordFormData {
 }
 
 function ProfileContent() {
-  const { user, logout, isLoggingOut } = useAuth();
+  const { user, logout, isLoggingOut, isLoading: isLoadingAuth } = useAuth();
   const queryClient = useQueryClient();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -48,76 +49,30 @@ function ProfileContent() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [successMessage, setSuccessMessage] = useState('');
 
-  // Fetch profile data
-  const { data: profile, isLoading } = useQuery({
-    queryKey: ['user', 'profile'],
-    queryFn: async () => {
-      try {
-        const response = await usersService.getProfile();
-        // Backend returns data directly (not wrapped in ApiResponse)
-        // response is ApiResponse<UserProfile> from axios
-        // response.data is the ApiResponse format { success, data, ... }
-        // But backend actually returns UserProfile directly, so response.data is UserProfile
-        // However, if it's wrapped, we need to check
-        let profileData: any;
-
-        if (response && typeof response === 'object') {
-          // Check if it's ApiResponse format (has 'data' property and 'success' property)
-          if ('data' in response && 'success' in response) {
-            profileData = (response as any).data;
-          } else {
-            // It's the UserProfile directly
-            profileData = response;
-          }
-        } else {
-          profileData = response;
-        }
-
-        // Ensure we always return a value (not undefined)
-        if (!profileData) {
-          throw new Error('Profile data is empty');
-        }
-
-        return profileData;
-      } catch (error: any) {
-        // If error, return null instead of undefined
-        if (error?.response?.status === 401 || error?.response?.status === 404) {
-          return null;
-        }
-        throw error;
-      }
-    },
-    enabled: !!user,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
-    refetchOnReconnect: false,
-  });
-
-  // Update form data when profile loads
+  // Use user data from auth context (from /api/auth/me)
+  // Update form data when user loads
   useEffect(() => {
-    if (profile) {
+    if (user) {
       setFormData({
-        email: profile.email || '',
+        email: user.email || '',
         password: '••••••••',
-        displayName: profile.displayName || '',
+        displayName: user.displayName || '',
       });
     }
-  }, [profile]);
+  }, [user]);
 
   // Update profile mutation
   const updateMutation = useMutation({
     mutationFn: (data: { displayName?: string; avatar?: string }) => usersService.updateProfile(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['user', 'profile'] });
       queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
+      queryClient.invalidateQueries({ queryKey: ['users', 'me', 'stats'] });
       setSuccessMessage('Cập nhật hồ sơ thành công!');
       setTimeout(() => setSuccessMessage(''), 3000);
       setErrors({});
     },
     onError: (error: any) => {
-      setErrors({ submit: error.response?.data?.error || 'Có lỗi xảy ra khi cập nhật hồ sơ' });
+      setErrors({ submit: error.response?.data?.error || error.message || 'Có lỗi xảy ra khi cập nhật hồ sơ' });
     },
   });
 
@@ -312,7 +267,7 @@ function ProfileContent() {
     return `${day}/${month}/${year}`;
   };
 
-  if (isLoading) {
+  if (isLoadingAuth || !user) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
@@ -335,7 +290,7 @@ function ProfileContent() {
           <div className="max-w-6xl mx-auto px-4 md:px-8">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
               {/* Left Section - Form */}
-              <div className="lg:col-span-2">
+              <div className="lg:col-span-2 space-y-6">
                 <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 md:p-8">
                   <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-6">
                     Hồ sơ của tôi
@@ -376,7 +331,7 @@ function ProfileContent() {
                       </label>
                       <input
                         type="text"
-                        value={profile?.username || ''}
+                        value={user?.username || ''}
                         disabled
                         className="w-full px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white cursor-not-allowed"
                       />
@@ -472,24 +427,32 @@ function ProfileContent() {
                     </button>
                   </form>
                 </div>
+
+                {/* User Stats Section - Mobile only */}
+                <div className="lg:hidden bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 md:p-8">
+                  <h2 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white mb-6">
+                    Thống kê của tôi
+                  </h2>
+                  <UserStats />
+                </div>
               </div>
 
               {/* Right Section - Avatar */}
               <div className="lg:col-span-1">
-                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 md:p-8 flex flex-col items-center">
+                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 md:p-8 flex flex-col items-center sticky top-4">
                   {/* Avatar */}
                   <div className="relative mb-6">
                     <div className="w-32 h-32 md:w-40 md:h-40 rounded-full overflow-hidden bg-gradient-to-br from-blue-400 to-orange-400 p-1">
                       <div className="w-full h-full rounded-full bg-white dark:bg-gray-700 flex items-center justify-center overflow-hidden">
-                        {profile?.avatar ? (
+                        {user?.avatar ? (
                           <img
-                            src={profile.avatar}
-                            alt={profile.displayName || profile.username}
+                            src={user.avatar}
+                            alt={user.displayName || user.username}
                             className="w-full h-full object-cover"
                           />
                         ) : (
                           <span className="text-4xl md:text-5xl font-bold text-gray-600 dark:text-gray-300">
-                            {(profile?.displayName || profile?.username || 'U').charAt(0).toUpperCase()}
+                            {(user?.displayName || user?.username || 'U').charAt(0).toUpperCase()}
                           </span>
                         )}
                       </div>
@@ -525,6 +488,16 @@ function ProfileContent() {
                     </button>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            {/* User Stats Section - Desktop full width */}
+            <div className="hidden lg:block mt-6 md:mt-8">
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 md:p-8">
+                <h2 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white mb-6">
+                  Thống kê của tôi
+                </h2>
+                <UserStats />
               </div>
             </div>
           </div>

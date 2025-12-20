@@ -127,3 +127,31 @@ export function getPaginationMeta(
     };
 }
 
+// Safe story select (excludes isRecommended if column doesn't exist)
+// Use this instead of storyInclude when column might not exist
+export const safeStorySelect = {
+    id: true,
+    title: true,
+    slug: true,
+    description: true,
+    coverImage: true,
+    authorId: true,
+    authorName: true,
+    status: true,
+    isPublished: true,
+    viewCount: true,
+    likeCount: true,
+    followCount: true,
+    rating: true,
+    ratingCount: true,
+    country: true,
+    tags: true,
+    createdAt: true,
+    updatedAt: true,
+    lastChapterAt: true,
+    author: storyInclude.author,
+    storyCategories: storyInclude.storyCategories,
+    storyTags: storyInclude.storyTags,
+    _count: storyInclude._count,
+} satisfies Prisma.StorySelect;
+

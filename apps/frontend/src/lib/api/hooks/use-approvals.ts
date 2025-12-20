@@ -51,14 +51,35 @@ export const approvalsService = {
     page?: number;
     limit?: number;
     status?: 'PENDING' | 'APPROVED' | 'REJECTED';
+    type?: 'STORY_PUBLISH' | 'CHAPTER_PUBLISH';
+    search?: string;
   }): Promise<{ data: ApprovalRequest[]; meta: any }> => {
     const params = new URLSearchParams();
     if (query?.page) params.append('page', String(query.page));
     if (query?.limit) params.append('limit', String(query.limit));
     if (query?.status) params.append('status', query.status);
+    if (query?.type) params.append('type', query.type);
+    if (query?.search) params.append('search', query.search);
 
     const response = await apiClient.get<{ data: ApprovalRequest[]; meta: any }>(
       `/approvals?${params.toString()}`
+    );
+    return response.data;
+  },
+
+  /**
+   * Get my approval requests (for authors)
+   */
+  getMyRequests: async (query?: {
+    page?: number;
+    limit?: number;
+  }): Promise<{ data: ApprovalRequest[]; meta: any }> => {
+    const params = new URLSearchParams();
+    if (query?.page) params.append('page', String(query.page));
+    if (query?.limit) params.append('limit', String(query.limit));
+
+    const response = await apiClient.get<{ data: ApprovalRequest[]; meta: any }>(
+      `/approvals/me?${params.toString()}`
     );
     return response.data;
   },
@@ -79,10 +100,26 @@ export const useApprovals = (query?: {
   page?: number;
   limit?: number;
   status?: 'PENDING' | 'APPROVED' | 'REJECTED';
+  type?: 'STORY_PUBLISH' | 'CHAPTER_PUBLISH';
+  search?: string;
 }) => {
   return useQuery({
     queryKey: ['approvals', 'all', query],
     queryFn: () => approvalsService.getAll(query),
+    staleTime: 30 * 1000, // 30 seconds
+  });
+};
+
+/**
+ * Get my approval requests (for authors)
+ */
+export const useMyApprovals = (query?: {
+  page?: number;
+  limit?: number;
+}) => {
+  return useQuery({
+    queryKey: ['approvals', 'me', query],
+    queryFn: () => approvalsService.getMyRequests(query),
     staleTime: 30 * 1000, // 30 seconds
   });
 };

@@ -1,7 +1,10 @@
 'use client';
 
+import { memo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { LikeButton } from '@/components/stories/like-button';
+import { FollowButton } from '@/components/stories/follow-button';
 
 interface BookCardProps {
   id: string;
@@ -9,6 +12,9 @@ interface BookCardProps {
   viewCount: number;
   coverImage?: string | null;
   slug?: string;
+  storyId?: string;
+  showLikeButton?: boolean;
+  iconType?: 'like' | 'follow' | 'none';
 }
 
 function formatViewCount(count: number): string {
@@ -21,54 +27,88 @@ function formatViewCount(count: number): string {
   return count.toString();
 }
 
-export function BookCard({ id, title, viewCount, coverImage, slug }: BookCardProps) {
+export const BookCard = memo(function BookCard({ id, title, viewCount, coverImage, slug, storyId, showLikeButton = true, iconType = 'like' }: BookCardProps) {
   return (
-    <Link
-      href={slug ? `/books/${slug}` : `/books/${id}`}
-      className="group flex-shrink-0 w-[150px] transition-all duration-500 hover:scale-105 active:scale-95"
-    >
+    <div className="group flex-shrink-0 w-[150px] transition-all duration-500 hover:scale-105 active:scale-95">
       <div className="flex flex-col gap-2">
         {/* Book Cover - Fixed size to ensure consistency */}
         <div className="relative w-[150px] h-[200px] rounded-lg overflow-hidden bg-gray-200 dark:bg-gray-700 shadow-md group-hover:shadow-2xl transition-all duration-500">
-          {coverImage ? (
-            <Image
-              src={coverImage}
-              alt={title}
-              fill
-              className="object-cover transition-transform duration-500 group-hover:scale-110"
-              sizes="150px"
-              unoptimized={coverImage.includes('images.unsplash.com') || coverImage.includes('cache.staticscdn.net')}
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <svg
-                width="60"
-                height="60"
-                viewBox="0 0 60 60"
-                fill="none"
-                className="text-gray-400 dark:text-gray-500"
-              >
-                <path
-                  d="M50 5L50 55L30 45.3594L10 55L10 5L50 5Z"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+          <Link
+            href={slug ? `/books/${slug}` : `/books/${id}`}
+            className="absolute inset-0 z-10"
+          >
+            {coverImage ? (
+              <Image
+                src={coverImage}
+                alt={title}
+                fill
+                className="object-cover transition-transform duration-500 group-hover:scale-110"
+                sizes="150px"
+                unoptimized={coverImage.includes('images.unsplash.com') || coverImage.includes('cache.staticscdn.net')}
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <svg
+                  width="60"
+                  height="60"
+                  viewBox="0 0 60 60"
+                  fill="none"
+                  className="text-gray-400 dark:text-gray-500"
+                >
+                  <path
+                    d="M50 5L50 55L30 45.3594L10 55L10 5L50 5Z"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M30 5V45.3594"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </div>
+            )}
+          </Link>
+          
+          {/* Icon Button - positioned on top right of book cover */}
+          {showLikeButton && storyId && iconType !== 'none' && (
+            <div 
+              className="absolute top-2 right-2 z-20" 
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+            >
+              {iconType === 'follow' ? (
+                <FollowButton 
+                  storyId={storyId} 
+                  showText={false} 
+                  className="w-10 h-10 md:w-12 md:h-12 p-0 flex items-center justify-center rounded-full bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm shadow-lg hover:bg-white dark:hover:bg-gray-800 transition-all"
                 />
-                <path
-                  d="M30 5V45.3594"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+              ) : (
+                <LikeButton 
+                  storyId={storyId} 
+                  showCount={false} 
+                  className="w-10 h-10 md:w-12 md:h-12 p-0 flex items-center justify-center rounded-full bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm shadow-lg hover:bg-white dark:hover:bg-gray-800 transition-all [&_svg]:text-red-500 [&_svg]:dark:text-red-400"
                 />
-              </svg>
+              )}
             </div>
           )}
         </div>
 
         {/* Book Info */}
-        <div className="flex flex-col gap-1 w-[150px]">
+        <Link
+          href={slug ? `/books/${slug}` : `/books/${id}`}
+          className="flex flex-col gap-1 w-[150px]"
+        >
           <h3 className="text-sm font-semibold text-gray-900 dark:text-white line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors duration-300 leading-tight">
             {title}
           </h3>
@@ -88,9 +128,9 @@ export function BookCard({ id, title, viewCount, coverImage, slug }: BookCardPro
             </svg>
             <span>{formatViewCount(viewCount)} lượt xem</span>
           </div>
-        </div>
+        </Link>
       </div>
-    </Link>
+    </div>
   );
-}
+});
 

@@ -24,6 +24,7 @@ export class ApprovalsService {
         if (storyId) {
             const story = await this.prisma.story.findUnique({
                 where: { id: storyId },
+                select: { id: true, authorId: true },
             });
             if (!story) {
                 throw new NotFoundException('Truyện không tồn tại');
@@ -36,7 +37,15 @@ export class ApprovalsService {
         if (chapterId) {
             const chapter = await this.prisma.chapter.findUnique({
                 where: { id: chapterId },
-                include: { story: true },
+                select: {
+                    id: true,
+                    story: {
+                        select: {
+                            id: true,
+                            authorId: true,
+                        },
+                    },
+                },
             });
             if (!chapter) {
                 throw new NotFoundException('Chương không tồn tại');
@@ -95,7 +104,13 @@ export class ApprovalsService {
         });
     }
 
-    async findAll(page?: number, limit?: number, status?: ApprovalStatus) {
+    async findAll(
+        page?: number,
+        limit?: number,
+        status?: ApprovalStatus,
+        type?: ApprovalType,
+        search?: string
+    ) {
         const { page: pageNum, limit: limitNum, skip } = getPaginationParams({
             page,
             limit,
@@ -104,6 +119,53 @@ export class ApprovalsService {
         const where: any = {};
         if (status) {
             where.status = status;
+        }
+        if (type) {
+            where.type = type;
+        }
+        if (search) {
+            where.OR = [
+                {
+                    story: {
+                        title: {
+                            contains: search,
+                            mode: 'insensitive',
+                        },
+                    },
+                },
+                {
+                    chapter: {
+                        title: {
+                            contains: search,
+                            mode: 'insensitive',
+                        },
+                    },
+                },
+                {
+                    user: {
+                        OR: [
+                            {
+                                username: {
+                                    contains: search,
+                                    mode: 'insensitive',
+                                },
+                            },
+                            {
+                                displayName: {
+                                    contains: search,
+                                    mode: 'insensitive',
+                                },
+                            },
+                        ],
+                    },
+                },
+                {
+                    message: {
+                        contains: search,
+                        mode: 'insensitive',
+                    },
+                },
+            ];
         }
 
         const total = await this.prisma.approvalRequest.count({ where });

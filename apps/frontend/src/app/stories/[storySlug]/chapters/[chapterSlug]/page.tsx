@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -8,13 +8,23 @@ import { Sidebar } from '@/components/layouts/sidebar';
 import { Header } from '@/components/layouts/header';
 import { Footer } from '@/components/layouts/footer';
 import { Loading } from '@/components/ui/loading';
-import { AdPopup } from '@/components/ads/ad-popup';
 import { useChapter, useChapters } from '@/lib/api/hooks/use-chapters';
 import { useStory } from '@/lib/api/hooks/use-stories';
 import { useAuth } from '@/lib/api/hooks/use-auth';
 import { useActiveAds, useTrackAdView, useTrackAdClick } from '@/lib/api/hooks/use-ads';
 import { AdType, AdPosition } from '@/lib/api/ads.service';
-import { markChapterCompleted, shouldShowPopup } from '@/utils/reading-tracker';
+import { 
+    markChapterCompleted, 
+    shouldShowPopup, 
+    getNextPopupAdIndex, 
+    getNextBannerAdIndex,
+    updateChapterReadingTime,
+    updateChapterScrollProgress,
+    hasValidReading,
+    getPopupDelay,
+    getVisitCount
+} from '@/utils/reading-tracker';
+import { useSaveProgress, useChapterProgress } from '@/lib/api/hooks/use-reading-history';
 
 export default function ChapterReadingPage() {
     const params = useParams();
@@ -24,17 +34,30 @@ export default function ChapterReadingPage() {
 
     // ALL HOOKS MUST BE CALLED BEFORE ANY EARLY RETURNS
     const { data: chapter, isLoading: chapterLoading, error: chapterError } = useChapter(storySlug, chapterSlug);
-    const { data: chaptersResponse } = useChapters(storySlug);
+    const { data: chaptersResponse, isLoading: chaptersLoading } = useChapters(storySlug);
     const { data: story } = useStory(storySlug);
     const { user } = useAuth();
 
     const [fontSize, setFontSize] = useState(16);
-    const [showChapterList, setShowChapterList] = useState(false);
-    const [showAdPopup, setShowAdPopup] = useState(false);
-    const [selectedPopupAd, setSelectedPopupAd] = useState<any>(null);
+    // Load showChapterList state from localStorage, default to false
+    const [showChapterList, setShowChapterList] = useState(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('showChapterList');
+            return saved === 'true';
+        }
+        return false;
+    });
     const [isChapterCompleted, setIsChapterCompleted] = useState(false);
     const contentRef = useRef<HTMLDivElement>(null);
-    const hasTrackedCompletion = useRef(false);
+    const hasTrackedCompletion = useRef<string | null>(null); // Track which chapterId has been tracked
+    const saveProgressTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const lastSavedProgressRef = useRef<number>(-1);
+    const hasInitializedHistory = useRef(false);
+    const chapterStartTimeRef = useRef<number>(0);
+    const readingTimeIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const shouldRedirectToAdRef = useRef<boolean>(false);
+    const pendingAdRef = useRef<any>(null);
+    const isRestoringScrollRef = useRef<boolean>(false); // Flag to prevent saving during scroll restore
 
     // Fetch active ads
     const { data: popupAds = [] } = useActiveAds(AdType.POPUP);
@@ -44,98 +67,388 @@ export default function ChapterReadingPage() {
 
     // Extract chapter data
     const chapterData = (chapter as any)?.data || (chapter as any);
+    
+    // Reading history hooks (must be after chapterData is defined)
+    const saveProgress = useSaveProgress();
+    const chapterId = chapterData?.id;
+    const { data: savedProgress, isLoading: isLoadingProgress } = useChapterProgress(chapterId || '', !!user && !!chapterId);
 
-    // Get first active popup ad
-    const popupAd = Array.isArray(popupAds) && popupAds.length > 0 ? popupAds[0] : null;
-    // Get first active bottom ad
-    const bottomAd = Array.isArray(bottomAds) && bottomAds.length > 0 ? bottomAds[0] : null;
+    // Get popup ad with rotation (show different ads each time)
+    const popupAd = useMemo(() => {
+        if (!Array.isArray(popupAds) || popupAds.length === 0) return null;
+        // Filter ads with valid imageUrl
+        const validAds = popupAds.filter((ad: any) => ad.imageUrl);
+        if (validAds.length === 0) return null;
+        // Rotate through ads (only when popup is triggered, not on every render)
+        // We'll select the ad when popup is actually shown
+        return validAds; // Return all valid ads, we'll select one when showing popup
+    }, [popupAds]);
+
+    // Get banner ads (can show multiple or rotate)
+    const bottomAdsList = useMemo(() => {
+        if (!Array.isArray(bottomAds) || bottomAds.length === 0) return [];
+        // Filter ads with valid imageUrl
+        const validAds = bottomAds.filter((ad: any) => ad.imageUrl);
+        return validAds;
+    }, [bottomAds]);
+
+    // Select one banner to show (rotate)
+    const bottomAd = useMemo(() => {
+        if (bottomAdsList.length === 0) return null;
+        // Rotate through ads based on visitCount
+        const adIndex = getNextBannerAdIndex(bottomAdsList.length);
+        return bottomAdsList[adIndex] || bottomAdsList[0] || null;
+    }, [bottomAdsList]);
 
     // Extract chapters array from response
-    const chapters = Array.isArray(chaptersResponse)
-        ? chaptersResponse
-        : (Array.isArray((chaptersResponse as any)?.data)
-            ? (chaptersResponse as any).data
-            : []);
+    // useChapters hook already handles the response format, so chaptersResponse should be an array
+    const chapters = Array.isArray(chaptersResponse) ? chaptersResponse : [];
 
-    // Find current chapter index
-    const currentChapterIndex = chapters?.findIndex((ch: any) => ch.slug === chapterSlug) ?? -1;
-    const prevChapter = currentChapterIndex > 0 ? chapters?.[currentChapterIndex - 1] : null;
-    const nextChapter = currentChapterIndex >= 0 && chapters && currentChapterIndex < chapters.length - 1
-        ? chapters[currentChapterIndex + 1]
-        : null;
+    // Sort chapters by order to ensure correct navigation
+    const sortedChapters = useMemo(() => {
+        if (!chapters || chapters.length === 0) return [];
+        return [...chapters].sort((a: any, b: any) => {
+            const orderA = a.order ?? 0;
+            const orderB = b.order ?? 0;
+            return orderA - orderB;
+        });
+    }, [chapters]);
 
-    // Track reading completion when user scrolls to bottom
-    useEffect(() => {
-        if (!chapterData || hasTrackedCompletion.current) return;
-
-        const handleScroll = () => {
-            if (hasTrackedCompletion.current) return;
-
-            let scrollTop = 0;
-            let scrollHeight = 0;
-            let clientHeight = 0;
-
-            // Check if content element has its own scroll
-            if (contentRef.current) {
-                const element = contentRef.current;
-                scrollTop = element.scrollTop;
-                scrollHeight = element.scrollHeight;
-                clientHeight = element.clientHeight;
-            } else {
-                // Fallback to window scroll
-                scrollTop = window.scrollY || document.documentElement.scrollTop;
-                scrollHeight = document.documentElement.scrollHeight;
-                clientHeight = window.innerHeight;
+    // Find current chapter by slug in sorted array (handle URL encoding)
+    const currentChapterIndex = useMemo(() => {
+        if (!sortedChapters.length || !chapterSlug) return -1;
+        
+        // Normalize both slugs for comparison
+        const normalizeSlug = (slug: string) => {
+            try {
+                return decodeURIComponent(slug).toLowerCase().trim();
+            } catch {
+                return slug.toLowerCase().trim();
             }
+        };
+        
+        const normalizedChapterSlug = normalizeSlug(chapterSlug);
+        
+        return sortedChapters.findIndex((ch: any) => {
+            if (!ch.slug) return false;
+            const normalizedChSlug = normalizeSlug(ch.slug);
+            return normalizedChSlug === normalizedChapterSlug;
+        });
+    }, [sortedChapters, chapterSlug]);
 
-            // Consider chapter completed when scrolled to within 5% of bottom
-            const scrollPercentage = (scrollTop + clientHeight) / scrollHeight;
-            const isNearBottom = scrollPercentage >= 0.95;
+    // Find previous and next chapters based on sorted array index
+    // This ensures correct navigation even if there are gaps in order numbers
+    const { prevChapter, nextChapter } = useMemo(() => {
+        if (currentChapterIndex < 0 || sortedChapters.length === 0) {
+            return { prevChapter: null, nextChapter: null };
+        }
+        
+        const prev = currentChapterIndex > 0 
+            ? sortedChapters[currentChapterIndex - 1] 
+            : null;
+        const next = currentChapterIndex < sortedChapters.length - 1
+            ? sortedChapters[currentChapterIndex + 1]
+            : null;
+        
+        return { prevChapter: prev, nextChapter: next };
+    }, [currentChapterIndex, sortedChapters]);
 
-            if (isNearBottom && !isChapterCompleted) {
-                setIsChapterCompleted(true);
+    // Mark chapter as visited when page loads and check for ad redirect
+    useEffect(() => {
+        if (!chapterData) return;
 
-                // Mark chapter as completed
-                const chapterId = `${storySlug}-${chapterSlug}`;
-                const wasNewCompletion = markChapterCompleted(chapterId);
-
-                // Check if should show popup (only if this is a new completion)
-                if (wasNewCompletion && shouldShowPopup(chapterId) && popupAd) {
-                    setSelectedPopupAd(popupAd);
-                    setShowAdPopup(true);
-                    // Track ad view
-                    if (popupAd.id) {
-                        trackAdView.mutate(popupAd.id);
+        // Mark chapter as visited immediately when page loads
+        const chapterId = `${storySlug}-${chapterSlug}`;
+        
+        // Only track if we haven't tracked this specific chapter yet
+        if (hasTrackedCompletion.current === chapterId) {
+            return; // Already tracked this chapter
+        }
+        
+        const wasNewVisit = markChapterCompleted(chapterId); // Always mark visit (increments visitCount)
+        hasTrackedCompletion.current = chapterId; // Mark this chapter as tracked
+        
+        // Check if should redirect to ad page immediately (after visiting enough chapters)
+        // Use popupInterval from ad if available, otherwise use default
+        // Use popupAds directly to avoid dependency array size changes
+        if (Array.isArray(popupAds) && popupAds.length > 0) {
+            // Filter valid ads
+            const validAds = popupAds.filter((ad: any) => ad.imageUrl);
+            if (validAds.length > 0) {
+                // Find ad with popupInterval (prefer ads with custom interval)
+                const adWithInterval = validAds.find((ad: any) => ad.popupInterval) || validAds[0];
+                const popupInterval = adWithInterval?.popupInterval || 3;
+                
+                // Check if should show popup (check immediately, no delay)
+                if (shouldShowPopup(chapterId, popupInterval)) {
+                    // Select ad with rotation when popup is triggered
+                    const adIndex = getNextPopupAdIndex(validAds.length);
+                    const selectedAd = validAds[adIndex] || validAds[0];
+                    
+                    if (selectedAd && selectedAd.imageUrl) {
+                        // Redirect immediately to ad page
+                        const returnUrl = `/stories/${storySlug}/chapters/${chapterSlug}`;
+                        const adUrl = `/ads/${selectedAd.id}?return=${encodeURIComponent(returnUrl)}&story=${storySlug}&chapter=${chapterSlug}`;
+                        
+                        // Log for debugging (development only)
+                        if (process.env.NODE_ENV === 'development') {
+                            console.log('Redirecting to ad page:', { adUrl, visitCount: getVisitCount() });
+                        }
+                        router.push(adUrl);
+                        return; // Don't continue with page setup, we're redirecting
                     }
                 }
-
-                hasTrackedCompletion.current = true;
             }
-        };
-
-        // Listen to both content element scroll and window scroll
-        const contentElement = contentRef.current;
-        if (contentElement) {
-            contentElement.addEventListener('scroll', handleScroll);
         }
-        window.addEventListener('scroll', handleScroll);
-
-        // Also check on mount in case content is already scrolled
-        setTimeout(handleScroll, 100);
-
-        return () => {
-            if (contentElement) {
-                contentElement.removeEventListener('scroll', handleScroll);
+        
+        // Start tracking reading time (only if not redirecting)
+        chapterStartTimeRef.current = Date.now();
+        
+        // Update reading time every 5 seconds
+        readingTimeIntervalRef.current = setInterval(() => {
+            if (chapterStartTimeRef.current > 0) {
+                const elapsed = Date.now() - chapterStartTimeRef.current;
+                updateChapterReadingTime(chapterId, elapsed);
+                chapterStartTimeRef.current = Date.now(); // Reset for next interval
             }
-            window.removeEventListener('scroll', handleScroll);
+        }, 5000);
+        
+        return () => {
+            if (readingTimeIntervalRef.current) {
+                clearInterval(readingTimeIntervalRef.current);
+                readingTimeIntervalRef.current = null;
+            }
+            // Save final reading time before unmount
+            if (chapterStartTimeRef.current > 0) {
+                const elapsed = Date.now() - chapterStartTimeRef.current;
+                updateChapterReadingTime(chapterId, elapsed);
+            }
         };
-    }, [chapterData, storySlug, chapterSlug, isChapterCompleted, popupAd]);
+    }, [chapterData, storySlug, chapterSlug, popupAds, router]);
 
     // Reset completion tracking when chapter changes
     useEffect(() => {
         setIsChapterCompleted(false);
-        hasTrackedCompletion.current = false;
+        hasTrackedCompletion.current = null; // Reset to null so new chapter can be tracked
+        lastSavedProgressRef.current = -1;
+        hasInitializedHistory.current = false;
+        shouldRedirectToAdRef.current = false;
+        pendingAdRef.current = null;
+        chapterStartTimeRef.current = 0;
+        isRestoringScrollRef.current = false; // Reset restore flag
+        
+        // Clear any pending save timeout
+        if (saveProgressTimeoutRef.current) {
+            clearTimeout(saveProgressTimeoutRef.current);
+            saveProgressTimeoutRef.current = null;
+        }
+        
+        // Clear reading time interval
+        if (readingTimeIntervalRef.current) {
+            clearInterval(readingTimeIntervalRef.current);
+            readingTimeIntervalRef.current = null;
+        }
     }, [chapterSlug]);
+
+    // Initialize reading history when chapter loads (if user is logged in)
+    useEffect(() => {
+        if (!user || !chapterId || !chapterData || isLoadingProgress || hasInitializedHistory.current) return;
+        
+        // If no saved progress exists (lastRead is null means no entry in database), initialize with 0% to create reading history entry
+        // Check both: savedProgress is undefined/null OR lastRead is null
+        const shouldInitialize = !savedProgress || savedProgress.lastRead === null;
+        
+        if (shouldInitialize) {
+            hasInitializedHistory.current = true;
+            // Wait a bit to ensure chapter data is fully loaded
+            const initTimer = setTimeout(() => {
+                // Log for debugging (development only)
+                if (process.env.NODE_ENV === 'development') {
+                    console.log('Initializing reading history:', { chapterId, userId: user.id, savedProgress });
+                }
+                saveProgress.mutate(
+                    { chapterId, progress: 0 },
+                    {
+                        onSuccess: (data) => {
+                            if (process.env.NODE_ENV === 'development') {
+                                console.log('Reading history initialized:', data);
+                            }
+                            lastSavedProgressRef.current = 0;
+                        },
+                        onError: (error) => {
+                            console.error('Failed to initialize reading history:', error);
+                            hasInitializedHistory.current = false; // Reset on error so we can retry
+                        }
+                    }
+                );
+            }, 500);
+            
+            return () => clearTimeout(initTimer);
+        } else if (savedProgress && savedProgress.progress !== undefined) {
+            // Update last saved progress if we have saved data
+            // Log for debugging (development only)
+            if (process.env.NODE_ENV === 'development') {
+                console.log('Loaded saved progress:', { chapterId, progress: savedProgress.progress, lastRead: savedProgress.lastRead });
+            }
+            lastSavedProgressRef.current = savedProgress.progress;
+            hasInitializedHistory.current = true; // Mark as initialized if we have existing data
+        }
+    }, [user, chapterId, chapterData, savedProgress, isLoadingProgress, saveProgress]);
+
+    // Restore scroll position from saved progress
+    useEffect(() => {
+        if (!contentRef.current || !savedProgress || !user || !chapterId) return;
+        
+        const progress = savedProgress.progress || 0;
+        if (progress > 0 && progress < 100) {
+            // Set flag to prevent saving during restore
+            isRestoringScrollRef.current = true;
+            
+            // Calculate scroll position based on progress
+            const scrollContainer = contentRef.current;
+            const maxScroll = scrollContainer.scrollHeight - scrollContainer.clientHeight;
+            const targetScroll = (progress / 100) * maxScroll;
+            
+            // Smooth scroll to saved position
+            setTimeout(() => {
+                scrollContainer.scrollTo({
+                    top: targetScroll,
+                    behavior: 'smooth'
+                });
+                
+                // Reset flag after scroll completes (smooth scroll takes ~500ms)
+                setTimeout(() => {
+                    isRestoringScrollRef.current = false;
+                }, 600);
+            }, 100);
+        }
+    }, [savedProgress, user, chapterId]); // Removed chapterData from dependencies
+
+    // Auto-save reading progress on scroll
+    useEffect(() => {
+        if (!contentRef.current || !user || !chapterId) return;
+
+        const scrollContainer = contentRef.current;
+        
+        const handleScroll = () => {
+            if (!scrollContainer || !chapterId) return;
+            
+            // Skip saving if we're restoring scroll position
+            if (isRestoringScrollRef.current) return;
+            
+            const scrollTop = scrollContainer.scrollTop;
+            const scrollHeight = scrollContainer.scrollHeight;
+            const clientHeight = scrollContainer.clientHeight;
+            
+            // Calculate progress percentage (0-100)
+            const maxScroll = scrollHeight - clientHeight;
+            if (maxScroll <= 0) return;
+            
+            const progress = Math.min(100, Math.max(0, Math.round((scrollTop / maxScroll) * 100)));
+            
+            // Update scroll progress in tracker
+            const chapterTrackerId = `${storySlug}-${chapterSlug}`;
+            updateChapterScrollProgress(chapterTrackerId, progress);
+            
+            // Save progress if changed (reduced threshold to 1% for better tracking)
+            const progressDiff = Math.abs(progress - lastSavedProgressRef.current);
+            if (progressDiff >= 1 || progress === 100) {
+                // Clear existing timeout
+                if (saveProgressTimeoutRef.current) {
+                    clearTimeout(saveProgressTimeoutRef.current);
+                }
+                
+                // Debounce: save after 1 second of no scrolling (reduced from 2s)
+                saveProgressTimeoutRef.current = setTimeout(() => {
+                    if (user && chapterId) {
+                        // Log for debugging (development only)
+                        if (process.env.NODE_ENV === 'development') {
+                            console.log('Saving reading progress:', { chapterId, progress, userId: user.id, lastSaved: lastSavedProgressRef.current });
+                        }
+                        saveProgress.mutate(
+                            { chapterId, progress },
+                            {
+                                onSuccess: (data) => {
+                                    if (process.env.NODE_ENV === 'development') {
+                                        console.log('Reading progress saved successfully:', data);
+                                    }
+                                    lastSavedProgressRef.current = progress;
+                                },
+                                onError: (error) => {
+                                    console.error('Failed to save reading progress:', error);
+                                }
+                            }
+                        );
+                    }
+                }, 1000); // 1 second debounce (reduced from 2s)
+            }
+        };
+
+        scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
+        
+        // Also save immediately when progress reaches 100%
+        const checkAndSaveComplete = () => {
+            if (!scrollContainer || !user || !chapterId) return;
+            
+            // Skip saving if we're restoring scroll position
+            if (isRestoringScrollRef.current) return;
+            
+            const scrollTop = scrollContainer.scrollTop;
+            const scrollHeight = scrollContainer.scrollHeight;
+            const clientHeight = scrollContainer.clientHeight;
+            const maxScroll = scrollHeight - clientHeight;
+            
+            if (maxScroll > 0) {
+                const progress = Math.min(100, Math.max(0, Math.round((scrollTop / maxScroll) * 100)));
+                
+                // Save immediately if reached 100% or very close (>= 90%)
+                if (progress >= 90 && lastSavedProgressRef.current < 90) {
+                    if (saveProgressTimeoutRef.current) {
+                        clearTimeout(saveProgressTimeoutRef.current);
+                    }
+                    // Log for debugging (development only)
+                    if (process.env.NODE_ENV === 'development') {
+                        console.log('Saving progress immediately (>= 90%):', { chapterId, progress });
+                    }
+                    saveProgress.mutate(
+                        { chapterId, progress },
+                        {
+                            onSuccess: () => {
+                                if (process.env.NODE_ENV === 'development') {
+                                    console.log('Progress saved immediately:', progress);
+                                }
+                                lastSavedProgressRef.current = progress;
+                            },
+                            onError: (error) => {
+                                console.error('Failed to save progress immediately:', error);
+                            }
+                        }
+                    );
+                }
+            }
+        };
+
+        // Check on scroll end
+        let scrollEndTimer: NodeJS.Timeout;
+        const handleScrollEnd = () => {
+            clearTimeout(scrollEndTimer);
+            scrollEndTimer = setTimeout(() => {
+                checkAndSaveComplete();
+            }, 500);
+        };
+        scrollContainer.addEventListener('scroll', handleScrollEnd, { passive: true });
+
+        return () => {
+            scrollContainer.removeEventListener('scroll', handleScroll);
+            scrollContainer.removeEventListener('scroll', handleScrollEnd);
+            if (saveProgressTimeoutRef.current) {
+                clearTimeout(saveProgressTimeoutRef.current);
+            }
+            if (scrollEndTimer) {
+                clearTimeout(scrollEndTimer);
+            }
+        };
+    }, [user, chapterId, saveProgress, storySlug, chapterSlug]); // Removed chapterData, added storySlug and chapterSlug
 
     // Check if we came from author edit context
     const getBackUrl = () => {
@@ -232,7 +545,14 @@ export default function ChapterReadingPage() {
                         <div className="sticky top-0 z-10 flex items-center justify-between bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm border-b border-gray-200 dark:border-gray-700">
                             <div className="flex items-center gap-4 flex-wrap">
                                 <button
-                                    onClick={() => setShowChapterList(!showChapterList)}
+                                    onClick={() => {
+                                        const newState = !showChapterList;
+                                        setShowChapterList(newState);
+                                        // Save to localStorage to persist across page reloads
+                                        if (typeof window !== 'undefined') {
+                                            localStorage.setItem('showChapterList', String(newState));
+                                        }
+                                    }}
                                     className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 transition-colors"
                                 >
                                     {showChapterList ? 'Ẩn' : 'Hiện'} danh sách chương
@@ -242,42 +562,54 @@ export default function ChapterReadingPage() {
                                 <div className="flex items-center gap-2">
                                     {prevChapter ? (
                                         <Link
-                                            href={`/stories/${storySlug}/chapters/${prevChapter.slug}`}
-                                            className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 transition-colors flex items-center gap-1"
+                                            href={shouldRedirectToAdRef.current && pendingAdRef.current
+                                                ? `/ads/${pendingAdRef.current.id}?return=/stories/${storySlug}/chapters/${prevChapter.slug}&story=${storySlug}&prev=${prevChapter.slug}${nextChapter ? `&next=${nextChapter.slug}` : ''}`
+                                                : `/stories/${storySlug}/chapters/${prevChapter.slug}`}
+                                            className="group px-4 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 dark:from-blue-600 dark:to-indigo-600 dark:hover:from-blue-700 dark:hover:to-indigo-700 rounded-lg text-sm font-semibold text-white transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg hover:scale-105"
+                                            onClick={() => {
+                                                shouldRedirectToAdRef.current = false;
+                                                pendingAdRef.current = null;
+                                            }}
                                         >
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="group-hover:-translate-x-1 transition-transform">
                                                 <path d="M15 18l-6-6 6-6" />
                                             </svg>
-                                            Chương trước
+                                            <span>Trước</span>
                                         </Link>
                                     ) : (
                                         <button
                                             disabled
-                                            className="px-4 py-2 bg-gray-50 dark:bg-gray-900 rounded-lg text-sm font-medium text-gray-400 dark:text-gray-600 cursor-not-allowed flex items-center gap-1"
+                                            className="px-4 py-2.5 bg-gray-200 dark:bg-gray-700 rounded-lg text-sm font-medium text-gray-400 dark:text-gray-600 cursor-not-allowed flex items-center gap-2"
                                         >
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                                 <path d="M15 18l-6-6 6-6" />
                                             </svg>
-                                            Chương trước
+                                            <span>Trước</span>
                                         </button>
                                     )}
                                     {nextChapter ? (
                                         <Link
-                                            href={`/stories/${storySlug}/chapters/${nextChapter.slug}`}
-                                            className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 transition-colors flex items-center gap-1"
+                                            href={shouldRedirectToAdRef.current && pendingAdRef.current
+                                                ? `/ads/${pendingAdRef.current.id}?return=/stories/${storySlug}/chapters/${nextChapter.slug}&story=${storySlug}&next=${nextChapter.slug}${prevChapter ? `&prev=${prevChapter.slug}` : ''}`
+                                                : `/stories/${storySlug}/chapters/${nextChapter.slug}`}
+                                            className="group px-4 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 dark:from-indigo-600 dark:to-purple-600 dark:hover:from-indigo-700 dark:hover:to-purple-700 rounded-lg text-sm font-semibold text-white transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg hover:scale-105"
+                                            onClick={() => {
+                                                shouldRedirectToAdRef.current = false;
+                                                pendingAdRef.current = null;
+                                            }}
                                         >
-                                            Chương sau
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <span>Sau</span>
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="group-hover:translate-x-1 transition-transform">
                                                 <path d="M9 18l6-6-6-6" />
                                             </svg>
                                         </Link>
                                     ) : (
                                         <button
                                             disabled
-                                            className="px-4 py-2 bg-gray-50 dark:bg-gray-900 rounded-lg text-sm font-medium text-gray-400 dark:text-gray-600 cursor-not-allowed flex items-center gap-1"
+                                            className="px-4 py-2.5 bg-gray-200 dark:bg-gray-700 rounded-lg text-sm font-medium text-gray-400 dark:text-gray-600 cursor-not-allowed flex items-center gap-2"
                                         >
-                                            Chương sau
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <span>Sau</span>
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                                 <path d="M9 18l6-6-6-6" />
                                             </svg>
                                         </button>
@@ -314,18 +646,34 @@ export default function ChapterReadingPage() {
                                         Danh sách chương
                                     </h3>
                                     <div className="space-y-1">
-                                        {chapters?.map((ch: any, index: number) => (
-                                            <Link
-                                                key={ch.id}
-                                                href={`/stories/${storySlug}/chapters/${ch.slug}`}
-                                                className={`block px-3 py-2 rounded text-sm transition-colors ${ch.slug === chapterSlug
-                                                    ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 font-medium'
-                                                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                        {sortedChapters?.map((ch: any, index: number) => {
+                                            // Normalize slugs for comparison (handle URL encoding)
+                                            const normalizeSlug = (slug: string) => {
+                                                try {
+                                                    return decodeURIComponent(slug).toLowerCase().trim();
+                                                } catch {
+                                                    return slug.toLowerCase().trim();
+                                                }
+                                            };
+                                            
+                                            const normalizedChapterSlug = normalizeSlug(chapterSlug);
+                                            const normalizedChSlug = ch.slug ? normalizeSlug(ch.slug) : '';
+                                            const isActive = normalizedChSlug === normalizedChapterSlug;
+                                            
+                                            return (
+                                                <Link
+                                                    key={ch.id}
+                                                    href={`/stories/${storySlug}/chapters/${ch.slug}`}
+                                                    className={`block px-3 py-2 rounded text-sm transition-colors ${
+                                                        isActive
+                                                            ? 'bg-blue-500 dark:bg-blue-600 text-white font-semibold shadow-sm'
+                                                            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                                                     }`}
-                                            >
-                                                Chương {ch.order || (index + 1)}
-                                            </Link>
-                                        ))}
+                                                >
+                                                    {ch.title || `Chương ${ch.order || (index + 1)}`}
+                                                </Link>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             </div>
@@ -413,69 +761,86 @@ export default function ChapterReadingPage() {
                                 <div className="flex-1">
                                     {prevChapter ? (
                                         <Link
-                                            href={`/stories/${storySlug}/chapters/${prevChapter.slug}`}
-                                            className="block p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm hover:shadow-md transition-shadow"
+                                            href={shouldRedirectToAdRef.current && pendingAdRef.current
+                                                ? `/ads/${pendingAdRef.current.id}?return=/stories/${storySlug}/chapters/${prevChapter.slug}&story=${storySlug}&prev=${prevChapter.slug}${nextChapter ? `&next=${nextChapter.slug}` : ''}`
+                                                : `/stories/${storySlug}/chapters/${prevChapter.slug}`}
+                                            className="group block p-5 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl shadow-md hover:shadow-lg border border-blue-100 dark:border-blue-800/50 transition-all duration-300 hover:scale-[1.02]"
+                                            onClick={() => {
+                                                // Reset redirect flag after clicking
+                                                shouldRedirectToAdRef.current = false;
+                                                pendingAdRef.current = null;
+                                            }}
                                         >
-                                            <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Chương trước</div>
-                                            <div className="font-medium text-gray-900 dark:text-white line-clamp-1">
-                                                {prevChapter.title}
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-blue-500 dark:bg-blue-600 flex items-center justify-center text-white group-hover:bg-blue-600 dark:group-hover:bg-blue-700 transition-colors">
+                                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                        <path d="M15 18l-6-6 6-6" />
+                                                    </svg>
+                                                </div>
+                                                <div className="text-sm font-semibold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                                                    Trước
+                                                </div>
                                             </div>
                                         </Link>
                                     ) : (
-                                        <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg text-gray-400 dark:text-gray-600">
-                                            Không có chương trước
+                                        <div className="p-5 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800">
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-600">
+                                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                        <path d="M15 18l-6-6 6-6" />
+                                                    </svg>
+                                                </div>
+                                                <div className="text-sm text-gray-400 dark:text-gray-600">Trước</div>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
 
-                                <Link
-                                    href={`/books/${storySlug}`}
-                                    className="px-6 py-4 bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
-                                >
-                                    Mục lục
-                                </Link>
-
                                 <div className="flex-1">
                                     {nextChapter ? (
                                         <Link
-                                            href={`/stories/${storySlug}/chapters/${nextChapter.slug}`}
-                                            className="block p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm hover:shadow-md transition-shadow text-right"
+                                            href={shouldRedirectToAdRef.current && pendingAdRef.current
+                                                ? `/ads/${pendingAdRef.current.id}?return=/stories/${storySlug}/chapters/${nextChapter.slug}&story=${storySlug}&next=${nextChapter.slug}${prevChapter ? `&prev=${prevChapter.slug}` : ''}`
+                                                : `/stories/${storySlug}/chapters/${nextChapter.slug}`}
+                                            className="group block p-5 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-xl shadow-md hover:shadow-lg border border-indigo-100 dark:border-indigo-800/50 transition-all duration-300 hover:scale-[1.02] text-right"
+                                            onClick={() => {
+                                                // Reset redirect flag after clicking
+                                                shouldRedirectToAdRef.current = false;
+                                                pendingAdRef.current = null;
+                                            }}
                                         >
-                                            <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Chương sau</div>
-                                            <div className="font-medium text-gray-900 dark:text-white line-clamp-1">
-                                                {nextChapter.title}
+                                            <div className="flex items-center gap-3 flex-row-reverse">
+                                                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-indigo-500 dark:bg-indigo-600 flex items-center justify-center text-white group-hover:bg-indigo-600 dark:group-hover:bg-indigo-700 transition-colors">
+                                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                        <path d="M9 18l6-6-6-6" />
+                                                    </svg>
+                                                </div>
+                                                <div className="text-sm font-semibold text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                                                    Sau
+                                                </div>
                                             </div>
                                         </Link>
                                     ) : (
-                                        <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg text-gray-400 dark:text-gray-600 text-right">
-                                            Không có chương sau
+                                        <div className="p-5 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 text-right">
+                                            <div className="flex items-center gap-3 flex-row-reverse">
+                                                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-600">
+                                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                        <path d="M9 18l6-6-6-6" />
+                                                    </svg>
+                                                </div>
+                                                <div className="text-sm text-gray-400 dark:text-gray-600">Sau</div>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
                             </div>
                         </div>
+
                     </div>
                 </main>
                 <Footer />
             </div>
 
-            {/* Ad Popup */}
-            {selectedPopupAd && (
-                <AdPopup
-                    isOpen={showAdPopup}
-                    onClose={() => {
-                        setShowAdPopup(false);
-                        setSelectedPopupAd(null);
-                    }}
-                    imageUrl={selectedPopupAd.imageUrl}
-                    linkUrl={selectedPopupAd.linkUrl}
-                    onLinkClick={() => {
-                        if (selectedPopupAd.id) {
-                            trackAdClick.mutate(selectedPopupAd.id);
-                        }
-                    }}
-                />
-            )}
         </div>
     );
 }

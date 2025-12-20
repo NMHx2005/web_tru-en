@@ -7,6 +7,7 @@ import { useUsers, useUpdateUser } from '@/lib/api/hooks/use-users';
 import { User } from '@/lib/api/users.service';
 import { ConfirmModal } from '@/components/ui/confirm-modal';
 import { UserRole } from '@shared/types';
+import { RefreshButton } from '@/components/admin/refresh-button';
 import * as XLSX from 'xlsx';
 
 export default function AdminUsersPage() {
@@ -170,12 +171,13 @@ export default function AdminUsersPage() {
     return (
         <AdminLayout>
             <div className="space-y-6">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
-                        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Quản lý người dùng</h1>
-                        <p className="text-gray-600 dark:text-gray-400 mt-2">Quản lý tất cả người dùng trong hệ thống</p>
+                        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">Quản lý người dùng</h1>
+                        <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mt-1 sm:mt-2">Quản lý tất cả người dùng trong hệ thống</p>
                     </div>
-                    <div className="flex gap-3">
+                    <div className="flex flex-wrap gap-2 sm:gap-3">
+                        <RefreshButton queryKeys={[['users']]} />
                         {selectedUsers.size > 0 && (
                             <div className="flex gap-2">
                                 <button

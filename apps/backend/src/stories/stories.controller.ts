@@ -10,6 +10,7 @@ import {
     UseGuards,
     UseInterceptors,
     UploadedFile,
+    UnauthorizedException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
@@ -70,47 +71,30 @@ export class StoriesController {
         return this.storiesService.getMostLiked(Math.min(limitNum, 20));
     }
 
-    @Public()
-    @Get(':slug')
-    async findOne(@Param('slug') slug: string, @CurrentUser() user?: any) {
-        const story = await this.storiesService.findOne(slug, user?.id);
-        // Increment view count (async, don't wait)
-        this.storiesService.incrementViewCount(slug).catch(() => { });
-        return story;
-    }
-
-    @Post()
+    @Get('users/me/liked')
     @UseGuards(JwtAuthGuard)
-    create(@CurrentUser() user: any, @Body() createStoryDto: CreateStoryDto) {
-        return this.storiesService.create(user.id, user.role, createStoryDto);
-    }
-
-    @Patch(':id')
-    @UseGuards(JwtAuthGuard)
-    update(
-        @Param('id') id: string,
+    async getMyLikedStories(
         @CurrentUser() user: any,
-        @Body() updateStoryDto: UpdateStoryDto
+        @Query('page') page?: string,
+        @Query('limit') limit?: string
     ) {
-        return this.storiesService.update(id, user.id, user.role, updateStoryDto);
-    }
-
-    @Delete(':id')
-    @UseGuards(JwtAuthGuard)
-    remove(@Param('id') id: string, @CurrentUser() user: any) {
-        return this.storiesService.remove(id, user.id, user.role);
-    }
-
-    @Post(':id/publish')
-    @UseGuards(JwtAuthGuard)
-    publish(@Param('id') id: string, @CurrentUser() user: any) {
-        return this.storiesService.publish(id, user.id);
+        return this.storiesService.getLikedStories(
+            user.id,
+            page ? parseInt(page) : undefined,
+            limit ? parseInt(limit) : undefined
+        );
     }
 
     @Get('me/list')
     @UseGuards(JwtAuthGuard)
     findMyStories(@CurrentUser() user: any, @Query() query: StoryQueryDto) {
         return this.storiesService.findMyStories(user.id, query);
+    }
+
+    @Post()
+    @UseGuards(JwtAuthGuard)
+    create(@CurrentUser() user: any, @Body() createStoryDto: CreateStoryDto) {
+        return this.storiesService.create(user.id, user.role, createStoryDto);
     }
 
     @Post('upload-cover')
@@ -143,6 +127,78 @@ export class StoriesController {
             message: 'Cover image uploaded successfully',
             timestamp: new Date().toISOString(),
         };
+    }
+
+    @Post(':storyId/like')
+    @UseGuards(JwtAuthGuard)
+    async likeStory(@Param('storyId') storyId: string, @CurrentUser() user: any) {
+        return this.storiesService.likeStory(user.id, storyId);
+    }
+
+    @Delete(':storyId/like')
+    @UseGuards(JwtAuthGuard)
+    async unlikeStory(@Param('storyId') storyId: string, @CurrentUser() user: any) {
+        return this.storiesService.unlikeStory(user.id, storyId);
+    }
+
+    @Get(':storyId/like')
+    @UseGuards(JwtAuthGuard)
+    async checkLiked(@Param('storyId') storyId: string, @CurrentUser() user: any) {
+        const isLiked = await this.storiesService.isLiked(user.id, storyId);
+        return { isLiked };
+    }
+
+    @Post(':id/publish')
+    @UseGuards(JwtAuthGuard)
+    publish(@Param('id') id: string, @CurrentUser() user: any) {
+        return this.storiesService.publish(id, user.id);
+    }
+
+    @Patch(':id')
+    @UseGuards(JwtAuthGuard)
+    update(
+        @Param('id') id: string,
+        @CurrentUser() user: any,
+        @Body() updateStoryDto: UpdateStoryDto
+    ) {
+        return this.storiesService.update(id, user.id, user.role, updateStoryDto);
+    }
+
+    @Delete(':id')
+    @UseGuards(JwtAuthGuard)
+    remove(@Param('id') id: string, @CurrentUser() user: any) {
+        return this.storiesService.remove(id, user.id, user.role);
+    }
+
+    @Public()
+    @Get(':storyId/similar')
+    async getSimilarStories(
+        @Param('storyId') storyId: string,
+        @Query('limit') limit?: number,
+    ) {
+        const limitNum = limit ? parseInt(limit.toString(), 10) : 10;
+        return this.storiesService.getSimilarStories(storyId, Math.min(limitNum, 20));
+    }
+
+    @Get('recommended')
+    async getRecommendedStories(
+        @CurrentUser() user: any,
+        @Query('limit') limit?: number,
+    ) {
+        if (!user) {
+            throw new UnauthorizedException('Vui lòng đăng nhập để xem gợi ý');
+        }
+        const limitNum = limit ? parseInt(limit.toString(), 10) : 10;
+        return this.storiesService.getRecommendedStories(user.id, Math.min(limitNum, 20));
+    }
+
+    @Public()
+    @Get(':slug')
+    async findOne(@Param('slug') slug: string, @CurrentUser() user?: any) {
+        const story = await this.storiesService.findOne(slug, user?.id);
+        // Increment view count (async, don't wait)
+        this.storiesService.incrementViewCount(slug).catch(() => { });
+        return story;
     }
 }
 

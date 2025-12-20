@@ -8,10 +8,15 @@ import { Sidebar } from '@/components/layouts/sidebar';
 import { Header } from '@/components/layouts/header';
 import { Footer } from '@/components/layouts/footer';
 import { Loading } from '@/components/ui/loading';
-import { useStory } from '@/lib/api/hooks/use-stories';
+import { useStory, useSimilarStories } from '@/lib/api/hooks/use-stories';
 import { useStories } from '@/lib/api/hooks/use-stories';
 import { useChapters } from '@/lib/api/hooks/use-chapters';
 import { Story } from '@/lib/api/stories.service';
+import { FollowButton } from '@/components/stories/follow-button';
+import { LikeButton } from '@/components/stories/like-button';
+import { CommentSection } from '@/components/comments/comment-section';
+import { StarRating } from '@/components/stories/star-rating';
+import { PopupSupportContent } from '@/components/pages/popup-support-content';
 
 export default function BookDetailPage() {
   const params = useParams();
@@ -58,31 +63,44 @@ export default function BookDetailPage() {
     }
   };
 
-  // Get related stories (same categories) - use useMemo to prevent re-renders
+  // Get similar stories using the new API
+  const { data: similarStoriesData } = useSimilarStories(story?.id || '', 10);
+
+  // Get stories with same categories as fallback
   const categoryIds = useMemo(() => {
     return story?.storyCategories?.map((sc: any) => sc.category?.id).filter(Boolean) || [];
   }, [story?.storyCategories]);
 
-  const { data: relatedStoriesData } = useStories({
+  const { data: sameCategoryStoriesData } = useStories({
     page: 1,
-    limit: 5,
+    limit: 10,
     categories: categoryIds.length > 0 ? categoryIds : undefined,
   });
 
-  const relatedStories: Story[] = useMemo(() => {
-    const stories = Array.isArray(relatedStoriesData)
-      ? relatedStoriesData
-      : (Array.isArray((relatedStoriesData as any)?.data)
-        ? (relatedStoriesData as any).data
+  const sameCategoryStories: Story[] = useMemo(() => {
+    const stories = Array.isArray(sameCategoryStoriesData)
+      ? sameCategoryStoriesData
+      : (Array.isArray((sameCategoryStoriesData as any)?.data)
+        ? (sameCategoryStoriesData as any).data
         : []);
-    return stories.filter((s: Story) => s.id !== story?.id).slice(0, 5);
-  }, [relatedStoriesData, story?.id]);
+    return stories.filter((s: Story) => s.id !== story?.id).slice(0, 10);
+  }, [sameCategoryStoriesData, story?.id]);
+
+  // Combine similar stories and same category stories
+  const similarStories: Story[] = useMemo(() => {
+    // First try similar stories from API
+    if (similarStoriesData && Array.isArray(similarStoriesData) && similarStoriesData.length > 0) {
+      return similarStoriesData;
+    }
+    // Fallback to same category stories
+    if (sameCategoryStories.length > 0) {
+      return sameCategoryStories;
+    }
+    return [];
+  }, [similarStoriesData, sameCategoryStories]);
 
   const [showFullDescription, setShowFullDescription] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
-  const [commentText, setCommentText] = useState('');
-  const [rating, setRating] = useState(0);
-  const [hoveredRating, setHoveredRating] = useState(0);
   const [showSupportModal, setShowSupportModal] = useState(false);
 
   // Related books scroll refs and state
@@ -144,51 +162,29 @@ export default function BookDetailPage() {
     return count.toString();
   };
 
-  const renderStars = (rating: number = 0, interactive = false, onStarClick?: (rating: number) => void) => {
+  const renderStars = (rating: number = 0) => {
     const stars = [];
-    const displayRating = interactive ? (hoveredRating || rating) : rating;
     for (let i = 1; i <= 5; i++) {
       stars.push(
-        <button
+        <svg
           key={i}
-          type="button"
-          onClick={() => interactive && onStarClick ? onStarClick(i) : undefined}
-          onMouseEnter={() => interactive && setHoveredRating(i)}
-          onMouseLeave={() => interactive && setHoveredRating(0)}
-          className={interactive ? 'cursor-pointer transition-transform duration-200 hover:scale-125' : ''}
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill={i <= rating ? 'currentColor' : 'none'}
+          className={i <= rating ? 'text-yellow-500' : 'text-gray-300 dark:text-gray-600'}
         >
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill={i <= displayRating ? 'currentColor' : 'none'}
-            className={i <= displayRating ? 'text-yellow-500' : 'text-gray-300 dark:text-gray-600'}
-          >
-            <path
-              d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </button>
+          <path
+            d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
       );
     }
     return stars;
-  };
-
-  const handleSubmitComment = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!commentText.trim() || rating === 0) {
-      alert('Vui lòng nhập bình luận và đánh giá!');
-      return;
-    }
-    // TODO: Submit to API
-    console.log('Comment:', commentText, 'Rating:', rating);
-    alert('Bình luận đã được gửi! (Tính năng đang phát triển)');
-    setCommentText('');
-    setRating(0);
   };
 
   // Related books drag-to-scroll handlers
@@ -394,59 +390,11 @@ export default function BookDetailPage() {
                   </button>
                 )}
 
-                <button className="w-[36px] h-[36px] md:w-[40px] md:h-[40px] flex items-center justify-center rounded-lg border-2 border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-300 hover:scale-105 active:scale-95">
-                  <svg
-                    width="20"
-                    height="20"
-                    className="md:w-[24px] md:h-[24px] text-gray-700 dark:text-gray-300"
-                    viewBox="0 0 40 40"
-                    fill="none"
-                  >
-                    <path
-                      d="M8.75 5L20 3.75L31.25 5V15C31.25 20.625 20 26.25 20 26.25C20 26.25 8.75 20.625 8.75 15V5Z"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </button>
+                {/* Follow Button */}
+                <FollowButton storyId={story.id} showText={false} className="w-[36px] h-[36px] md:w-[40px] md:h-[40px] p-0 flex items-center justify-center" />
 
-                <button className="w-[36px] h-[36px] md:w-[40px] md:h-[40px] flex items-center justify-center rounded-lg border-2 border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-300 hover:scale-105 active:scale-95">
-                  <svg
-                    width="20"
-                    height="20"
-                    className="md:w-[24px] md:h-[24px] text-gray-700 dark:text-gray-300"
-                    viewBox="0 0 40 40"
-                    fill="none"
-                  >
-                    <path
-                      d="M20 8.33333C15.8333 3.33333 8.33333 4.16667 8.33333 12.5C8.33333 20.8333 20 31.6667 20 31.6667C20 31.6667 31.6667 20.8333 31.6667 12.5C31.6667 4.16667 24.1667 3.33333 20 8.33333Z"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </button>
-
-                <button className="w-[36px] h-[36px] md:w-[40px] md:h-[40px] flex items-center justify-center rounded-lg border-2 border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-300 hover:scale-105 active:scale-95">
-                  <svg
-                    width="24"
-                    height="24"
-                    className="text-gray-700 dark:text-gray-300"
-                    viewBox="0 0 40 40"
-                    fill="none"
-                  >
-                    <path
-                      d="M3.74474 2.49499L20 18.75L36.2553 2.49499M3.74474 37.505L20 21.25L36.2553 37.505"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </button>
+                {/* Like Button */}
+                <LikeButton storyId={story.id} likeCount={story.likeCount} showCount={false} className="w-[36px] h-[36px] md:w-[40px] md:h-[40px] p-0 flex items-center justify-center" />
 
                 <button
                   onClick={() => setShowSupportModal(true)}
@@ -551,55 +499,11 @@ export default function BookDetailPage() {
                 )
               )}
 
-              {/* Comment Form */}
-              <div className="mt-8">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-                  Viết bình luận và đánh giá
-                </h2>
-                <form onSubmit={handleSubmitComment} className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm mb-6">
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Đánh giá của bạn
-                    </label>
-                    <div className="flex items-center gap-2">
-                      {renderStars(rating, true, setRating)}
-                      {rating > 0 && (
-                        <span className="text-sm text-gray-600 dark:text-gray-400 ml-2">
-                          {rating} / 5 sao
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="mb-4">
-                    <label
-                      htmlFor="comment"
-                      className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                    >
-                      Bình luận
-                    </label>
-                    <textarea
-                      id="comment"
-                      value={commentText}
-                      onChange={(e) => setCommentText(e.target.value)}
-                      rows={4}
-                      className="w-full px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300"
-                      placeholder="Chia sẻ suy nghĩ của bạn về cuốn sách này..."
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="px-6 py-2 bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white rounded-lg font-medium transition-all duration-300 hover:scale-105 active:scale-95"
-                  >
-                    Gửi bình luận
-                  </button>
-                </form>
-              </div>
-
-              {/* Related Books Section */}
-              {relatedStories.length > 0 && (
+              {/* Similar Stories Section */}
+              {similarStories.length > 0 && (
                 <div className="mt-12">
                   <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-                    Truyện liên quan
+                    Truyện tương tự
                   </h2>
                   <div
                     ref={relatedBooksScrollRef}
@@ -615,7 +519,7 @@ export default function BookDetailPage() {
                     }}
                   >
                     <div className="flex gap-4 pb-4 min-w-max">
-                      {relatedStories.map((relatedStory) => (
+                      {similarStories.map((relatedStory) => (
                         <Link
                           key={relatedStory.id}
                           href={`/books/${relatedStory.slug}`}
@@ -682,6 +586,49 @@ export default function BookDetailPage() {
                   </div>
                 </div>
               )}
+
+              {/* Comments Section */}
+              {story?.id && (
+                <div className="mx-auto">
+                  <CommentSection storyId={story.id} story={story} />
+                </div>
+              )}
+
+              {/* Structured Data (JSON-LD) */}
+              {story && (
+                <script
+                  type="application/ld+json"
+                  dangerouslySetInnerHTML={{
+                    __html: JSON.stringify({
+                      '@context': 'https://schema.org',
+                      '@type': 'Book',
+                      name: story.title,
+                      description: story.description || '',
+                      image: story.coverImage || '',
+                      author: {
+                        '@type': 'Person',
+                        name: story.authorName || story.author?.displayName || story.author?.username || 'Tác giả',
+                      },
+                      publisher: {
+                        '@type': 'Organization',
+                        name: 'Web Truyen Tien Hung',
+                      },
+                      datePublished: story.createdAt,
+                      dateModified: story.updatedAt,
+                      inLanguage: 'vi',
+                      numberOfPages: story._count?.chapters || 0,
+                      aggregateRating: story.ratingCount > 0 ? {
+                        '@type': 'AggregateRating',
+                        ratingValue: story.rating,
+                        ratingCount: story.ratingCount,
+                        bestRating: 5,
+                        worstRating: 1,
+                      } : undefined,
+                      genre: story.storyCategories?.map((sc: any) => sc.category?.name).filter(Boolean) || [],
+                    }),
+                  }}
+                />
+              )}
             </div>
           </div>
         </main>
@@ -726,57 +673,7 @@ export default function BookDetailPage() {
             </div>
 
             {/* Modal Content */}
-            <div className="px-6 py-6 space-y-6">
-              {/* Introduction Text */}
-              <div className="space-y-4 text-base text-gray-700 dark:text-gray-300 leading-relaxed">
-                <p>
-                  <strong className="text-gray-900 dark:text-white">HÙNG YÊU</strong> rất mong nhận được sự ủng hộ từ cộng đồng, doanh nghiệp và những người yêu nghệ thuật để cùng chúng tôi thực hiện các dự án làm phim, viết truyện, sáng tác sách và phát triển nội dung giải trí mang giá trị nhân văn. Mỗi sự ủng hộ của bạn đều là nguồn động viên to lớn, giúp các tác giả và nhà sáng tạo có thêm điều kiện để nuôi dưỡng đam mê và cho ra đời những tác phẩm chất lượng.
-                </p>
-                <p>
-                  Sự đồng hành của bạn không chỉ góp phần phát triển nền tảng <strong className="text-gray-900 dark:text-white">HÙNG YÊU</strong>, mà còn chung tay lan tỏa nghệ thuật, cảm xúc và giá trị tinh thần tích cực đến cộng đồng.
-                </p>
-                <p className="text-center">
-                  <span className="text-red-500 text-lg">❤️</span> <strong className="text-gray-900 dark:text-white">HÙNG YÊU</strong> – Trân trọng mọi sự ủng hộ, cùng nhau kiến tạo những tác phẩm chạm đến tâm hồn.
-                </p>
-              </div>
-
-              {/* Support Information Section */}
-              <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
-                  Thông tin ủng hộ
-                </h3>
-
-                {/* QR Code */}
-                <div className="flex justify-center mb-6">
-                  <div className="relative w-64 h-64 md:w-80 md:h-80 rounded-lg overflow-hidden border-2 border-gray-200 dark:border-gray-700 bg-white p-2">
-                    <Image
-                      src="/ungho.jpg"
-                      alt="Mã QR ủng hộ"
-                      fill
-                      className="object-contain"
-                      sizes="(max-width: 768px) 256px, 320px"
-                    />
-                  </div>
-                </div>
-
-                {/* Instructions */}
-                <div className="space-y-3 text-sm md:text-base text-gray-700 dark:text-gray-300">
-                  <p>
-                    <strong className="text-gray-900 dark:text-white">Rất mong mọi người ghi rõ Họ và Tên cũng như Biệt Danh</strong>
-                  </p>
-                  <div className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 dark:border-blue-400 p-4 rounded-r-lg">
-                    <p className="font-semibold text-gray-900 dark:text-white mb-2">Lưu ý:</p>
-                    <p>Ghi chú ủng hộ vì lý do gì, ủng hộ tác phẩm nào và vì sao</p>
-                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                      (Ví dụ: ủng hộ bộ truyện, phim, sách nào đó để mong phát hành sách hoặc làm phim)
-                    </p>
-                  </div>
-                  <p className="text-center font-semibold text-gray-900 dark:text-white mt-4">
-                    Cảm ơn tất cả mọi người.
-                  </p>
-                </div>
-              </div>
-            </div>
+            <PopupSupportContent />
 
             {/* Modal Footer */}
             <div className="sticky bottom-0 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 px-6 py-4 flex justify-end">

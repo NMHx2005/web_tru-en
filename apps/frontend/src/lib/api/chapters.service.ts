@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import { ApiResponse } from './client';
+import { ApiResponse, PaginatedResponse } from './client';
 
 export interface Chapter {
     id: string;
@@ -88,7 +88,7 @@ export const chaptersService = {
         chapterId: string
     ): Promise<ApiResponse<Chapter> | Chapter> => {
         // First get all chapters to find by ID
-        const allChapters = await this.getAll(storySlug);
+        const allChapters = await chaptersService.getAll(storySlug);
         const chapters = Array.isArray(allChapters) 
             ? allChapters 
             : (Array.isArray((allChapters as any).data) ? (allChapters as any).data : []);
@@ -115,6 +115,49 @@ export const chaptersService = {
 
     publish: async (storySlug: string, id: string): Promise<ApiResponse<Chapter>> => {
         const response = await apiClient.post<Chapter>(`/stories/${storySlug}/chapters/${id}/publish`);
+        return response.data;
+    },
+
+    // Admin endpoints
+    getAllForAdmin: async (params?: {
+        page?: number;
+        limit?: number;
+        search?: string;
+        storyId?: string;
+        isPublished?: boolean;
+        sortBy?: string;
+        sortOrder?: 'asc' | 'desc';
+    }): Promise<PaginatedResponse<Chapter>> => {
+        const queryParams = new URLSearchParams();
+        if (params?.page) queryParams.append('page', String(params.page));
+        if (params?.limit) queryParams.append('limit', String(params.limit));
+        if (params?.search) queryParams.append('search', params.search);
+        if (params?.storyId) queryParams.append('storyId', params.storyId);
+        if (params?.isPublished !== undefined) queryParams.append('isPublished', String(params.isPublished));
+        if (params?.sortBy) queryParams.append('sortBy', params.sortBy);
+        if (params?.sortOrder) queryParams.append('sortOrder', params.sortOrder);
+
+        const response = await apiClient.get<{ data: Chapter[]; meta: any }>(
+            `/admin/chapters?${queryParams.toString()}`
+        );
+        return response.data;
+    },
+
+    getChaptersStats: async (): Promise<{
+        total: number;
+        published: number;
+        draft: number;
+        totalViews: number;
+    }> => {
+        const response = await apiClient.get('/admin/chapters/stats');
+        return response.data;
+    },
+
+    getChaptersChartData: async (days: number = 30): Promise<{
+        labels: string[];
+        data: number[];
+    }> => {
+        const response = await apiClient.get(`/admin/chapters/chart-data?days=${days}`);
         return response.data;
     },
 };

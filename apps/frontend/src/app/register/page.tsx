@@ -5,11 +5,14 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/components/providers/theme-provider';
+import { useSettings } from '@/lib/api/hooks/use-settings';
+import { Loading } from '@/components/ui/loading';
 
 export default function RegisterPage() {
   const router = useRouter();
   const { register, isRegistering } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const { data: settings, isLoading: settingsLoading } = useSettings();
   const [formData, setFormData] = useState({
     email: '',
     username: '',
@@ -28,6 +31,16 @@ export default function RegisterPage() {
     const timer = setTimeout(() => setIsLoading(false), 300);
     return () => clearTimeout(timer);
   }, []);
+
+  // Check if registration is allowed
+  useEffect(() => {
+    if (!settingsLoading && settings) {
+      if (!settings.allowRegistration) {
+        // Redirect to login page if registration is disabled
+        router.push('/login');
+      }
+    }
+  }, [settings, settingsLoading, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,10 +86,48 @@ export default function RegisterPage() {
     }
   };
 
-  if (isLoading) {
+  // Show loading while checking settings
+  if (isLoading || settingsLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+        <Loading />
+      </div>
+    );
+  }
+
+  // If registration is not allowed, show message (will redirect via useEffect)
+  if (settings && !settings.allowRegistration) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+        <div className="max-w-md w-full text-center p-6">
+          <div className="mb-6">
+            <svg
+              className="mx-auto h-24 w-24 text-yellow-500"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+            Đăng ký tạm thời bị tắt
+          </h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-6">
+            Đăng ký tài khoản mới hiện đang bị tắt. Vui lòng liên hệ quản trị viên.
+          </p>
+          <Link
+            href="/login"
+            className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Quay lại đăng nhập
+          </Link>
+        </div>
       </div>
     );
   }

@@ -47,12 +47,16 @@ export class ApprovalsController {
   findAll(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
-    @Query('status') status?: ApprovalStatus
+    @Query('status') status?: ApprovalStatus,
+    @Query('type') type?: string,
+    @Query('search') search?: string
   ) {
     return this.approvalsService.findAll(
       page ? parseInt(page) : undefined,
       limit ? parseInt(limit) : undefined,
-      status
+      status,
+      type as any,
+      search
     );
   }
 

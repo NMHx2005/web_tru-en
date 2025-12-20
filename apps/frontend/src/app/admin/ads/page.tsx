@@ -7,6 +7,8 @@ import { Loading } from '@/components/ui/loading';
 import { useAds, useCreateAd, useUpdateAd, useDeleteAd } from '@/lib/api/hooks/use-ads';
 import { AdType, AdPosition, Ad } from '@/lib/api/ads.service';
 import { ConfirmModal } from '@/components/ui/confirm-modal';
+import { RefreshButton } from '@/components/admin/refresh-button';
+import { useToast, ToastContainer } from '@/components/ui/toast';
 import * as XLSX from 'xlsx';
 
 export default function AdminAdsPage() {
@@ -38,45 +40,63 @@ export default function AdminAdsPage() {
     const createMutation = useCreateAd();
     const updateMutation = useUpdateAd();
     const deleteMutation = useDeleteAd();
+    const { toasts, showToast, removeToast } = useToast();
 
     const ads = data?.data || [];
     const meta = data?.meta;
 
     const handleDelete = async () => {
         if (deletingAd) {
-            await deleteMutation.mutateAsync(deletingAd.id);
-            setDeletingAd(null);
+            try {
+                await deleteMutation.mutateAsync(deletingAd.id);
+                setDeletingAd(null);
+                showToast('Đã xóa quảng cáo thành công', 'success');
+            } catch (error) {
+                showToast('Có lỗi xảy ra khi xóa quảng cáo', 'error');
+            }
         }
     };
 
     const handleBulkAction = async () => {
         if (!bulkAction || selectedAds.size === 0) return;
 
-        if (bulkAction === 'delete') {
-            const promises = Array.from(selectedAds).map((adId) =>
-                deleteMutation.mutateAsync(adId)
-            );
-            await Promise.all(promises);
-        } else {
-            const promises = Array.from(selectedAds).map((adId) =>
-                updateMutation.mutateAsync({
-                    id: adId,
-                    data: { isActive: bulkAction === 'activate' },
-                })
-            );
-            await Promise.all(promises);
-        }
+        try {
+            if (bulkAction === 'delete') {
+                const promises = Array.from(selectedAds).map((adId) =>
+                    deleteMutation.mutateAsync(adId)
+                );
+                await Promise.all(promises);
+                showToast(`Đã xóa ${selectedAds.size} quảng cáo thành công`, 'success');
+            } else {
+                const promises = Array.from(selectedAds).map((adId) =>
+                    updateMutation.mutateAsync({
+                        id: adId,
+                        data: { isActive: bulkAction === 'activate' },
+                    })
+                );
+                await Promise.all(promises);
+                const actionText = bulkAction === 'activate' ? 'kích hoạt' : 'tắt';
+                showToast(`Đã ${actionText} ${selectedAds.size} quảng cáo thành công`, 'success');
+            }
 
-        setSelectedAds(new Set());
-        setShowBulkActionModal(false);
-        setBulkAction(null);
+            setSelectedAds(new Set());
+            setShowBulkActionModal(false);
+            setBulkAction(null);
+        } catch (error) {
+            showToast('Có lỗi xảy ra khi thực hiện thao tác', 'error');
+        }
     };
 
     const handleToggleActive = async (ad: Ad) => {
-        await updateMutation.mutateAsync({
-            id: ad.id,
-            data: { isActive: !ad.isActive },
-        });
+        try {
+            await updateMutation.mutateAsync({
+                id: ad.id,
+                data: { isActive: !ad.isActive },
+            });
+            showToast(ad.isActive ? 'Đã tắt quảng cáo' : 'Đã kích hoạt quảng cáo', 'success');
+        } catch (error) {
+            showToast('Có lỗi xảy ra khi cập nhật trạng thái', 'error');
+        }
     };
 
     const handleExportExcel = () => {
@@ -88,6 +108,7 @@ export default function AdminAdsPage() {
             'Link quảng cáo': ad.linkUrl || '',
             'Loại': ad.type,
             'Vị trí': ad.position,
+            'Số chương cần đọc': ad.type === AdType.POPUP && ad.popupInterval ? ad.popupInterval : '',
             'Trạng thái': ad.isActive ? 'Hoạt động' : 'Tắt',
             'Ngày bắt đầu': ad.startDate ? new Date(ad.startDate).toLocaleDateString('vi-VN') : '',
             'Ngày kết thúc': ad.endDate ? new Date(ad.endDate).toLocaleDateString('vi-VN') : '',
@@ -184,12 +205,13 @@ export default function AdminAdsPage() {
     return (
         <AdminLayout>
             <div className="space-y-6">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
-                        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Quản lý Quảng cáo</h1>
-                        <p className="text-gray-600 dark:text-gray-400 mt-2">Quản lý và theo dõi quảng cáo trên hệ thống</p>
+                        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">Quản lý Quảng cáo</h1>
+                        <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mt-1 sm:mt-2">Quản lý và theo dõi quảng cáo trên hệ thống</p>
                     </div>
-                    <div className="flex gap-3">
+                    <div className="flex flex-wrap gap-2 sm:gap-3">
+                        <RefreshButton queryKeys={[['ads']]} />
                         {selectedAds.size > 0 && (
                             <div className="flex gap-2">
                                 <button
@@ -445,16 +467,6 @@ export default function AdminAdsPage() {
                                                                     <div className="text-sm text-gray-500 dark:text-gray-400 truncate">
                                                                         {ad.description}
                                                                     </div>
-                                                                )}
-                                                                {ad.linkUrl && (
-                                                                    <a
-                                                                        href={ad.linkUrl}
-                                                                        target="_blank"
-                                                                        rel="noopener noreferrer"
-                                                                        className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                                                                    >
-                                                                        {ad.linkUrl}
-                                                                    </a>
                                                                 )}
                                                             </div>
                                                         </div>
@@ -729,6 +741,9 @@ export default function AdminAdsPage() {
                     isLoading={bulkAction === 'delete' ? deleteMutation.isPending : updateMutation.isPending}
                 />
             )}
+
+            {/* Toast Container */}
+            <ToastContainer toasts={toasts} onClose={removeToast} />
         </AdminLayout>
     );
 }
@@ -953,6 +968,16 @@ function ViewAdModal({
                                     </a>
                                 </div>
                             )}
+                            {ad.type === AdType.POPUP && ad.popupInterval && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        Số chương cần đọc
+                                    </label>
+                                    <p className="text-gray-900 dark:text-white">
+                                        {ad.popupInterval} chương
+                                    </p>
+                                </div>
+                            )}
                             {ad.description && (
                                 <div className="col-span-2">
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -1065,6 +1090,7 @@ function AdFormModal({
     onCreate: (data: any) => Promise<any>;
     onUpdate: (data: { id: string; data: any }) => Promise<any>;
 }) {
+    const { showToast } = useToast();
     const [imageInputType, setImageInputType] = useState<'url' | 'upload'>(ad?.imageUrl ? 'url' : 'url');
     const [formData, setFormData] = useState({
         title: ad?.title || '',
@@ -1076,6 +1102,7 @@ function AdFormModal({
         isActive: ad?.isActive ?? true,
         startDate: ad?.startDate ? new Date(ad.startDate).toISOString().split('T')[0] : '',
         endDate: ad?.endDate ? new Date(ad.endDate).toISOString().split('T')[0] : '',
+        popupInterval: ad?.popupInterval || 3,
     });
 
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -1152,16 +1179,20 @@ function AdFormModal({
                 ...formData,
                 startDate: formData.startDate || undefined,
                 endDate: formData.endDate || undefined,
+                popupInterval: formData.type === AdType.POPUP ? formData.popupInterval : undefined,
             };
 
             if (ad) {
                 await onUpdate({ id: ad.id, data: submitData });
+                showToast('Đã cập nhật quảng cáo thành công', 'success');
             } else {
                 await onCreate(submitData);
+                showToast('Đã tạo quảng cáo thành công', 'success');
             }
             onClose();
         } catch (error) {
             console.error('Error saving ad:', error);
+            showToast('Có lỗi xảy ra khi lưu quảng cáo', 'error');
         } finally {
             setIsSubmitting(false);
         }
@@ -1371,6 +1402,27 @@ function AdFormModal({
                                 </select>
                             </div>
                         </div>
+
+                        {/* Popup Interval - Only show for POPUP type */}
+                        {formData.type === AdType.POPUP && (
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Số chương cần đọc trước khi hiển thị
+                                </label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    max="20"
+                                    value={formData.popupInterval}
+                                    onChange={(e) => setFormData({ ...formData, popupInterval: parseInt(e.target.value) || 3 })}
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                                    placeholder="3"
+                                />
+                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                    Quảng cáo sẽ hiển thị sau khi người dùng đọc đủ số chương này (mặc định: 3)
+                                </p>
+                            </div>
+                        )}
 
                         <div className="grid grid-cols-2 gap-4">
                             <div>

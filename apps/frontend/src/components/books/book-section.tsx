@@ -10,6 +10,7 @@ interface Book {
   viewCount: number;
   coverImage?: string | null;
   slug?: string;
+  storyId?: string;
 }
 
 interface BookSectionProps {
@@ -162,6 +163,7 @@ export function BookSection({ title, books, seeMoreLink = '#' }: BookSectionProp
                   viewCount={book.viewCount}
                   coverImage={book.coverImage}
                   slug={book.slug}
+                  storyId={book.storyId}
                 />
               </div>
             ))

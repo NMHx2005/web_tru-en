@@ -48,4 +48,7 @@ export class CreateAdDto {
     @IsOptional()
     @IsDateString()
     endDate?: string;
+
+    @IsOptional()
+    popupInterval?: number; // Number of chapters to read before showing popup (only for POPUP type)
 }

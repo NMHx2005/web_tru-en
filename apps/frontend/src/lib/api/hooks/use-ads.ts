@@ -7,9 +7,20 @@ import { adsService, Ad, AdType, AdPosition, CreateAdRequest, UpdateAdRequest } 
 export const useActiveAds = (type?: AdType, position?: AdPosition) => {
   return useQuery({
     queryKey: ['ads', 'active', type, position],
-    queryFn: () => adsService.getActiveAds(type, position),
+    queryFn: async () => {
+      const result = await adsService.getActiveAds(type, position);
+      // Ensure we return an array
+      if (Array.isArray(result)) {
+        return result;
+      }
+      // Handle ApiResponse format
+      if (result && (result as any).data && Array.isArray((result as any).data)) {
+        return (result as any).data;
+      }
+      return [];
+    },
     staleTime: 5 * 60 * 1000, // 5 minutes
-    cacheTime: 10 * 60 * 1000, // 10 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
   });
 };
 

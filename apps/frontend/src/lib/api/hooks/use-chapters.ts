@@ -84,7 +84,57 @@ export const usePublishChapter = (storySlug: string) => {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['chapters', storySlug] });
             queryClient.invalidateQueries({ queryKey: ['chapter'] });
+            queryClient.invalidateQueries({ queryKey: ['approvals'] }); // Refresh approval requests
         },
+    });
+};
+
+// Admin hooks
+export const useAdminChapters = (params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    storyId?: string;
+    isPublished?: boolean;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+}) => {
+    return useQuery({
+        queryKey: ['admin', 'chapters', params],
+        queryFn: async () => {
+            const response = await chaptersService.getAllForAdmin(params);
+            // Handle ApiResponse wrapper
+            if (response && 'data' in response && 'meta' in response) {
+                return response;
+            }
+            if ((response as any)?.data?.data && (response as any)?.data?.meta) {
+                return (response as any).data;
+            }
+            return response;
+        },
+        staleTime: 2 * 60 * 1000, // 2 minutes
+    });
+};
+
+export const useChaptersStats = () => {
+    return useQuery({
+        queryKey: ['admin', 'chapters', 'stats'],
+        queryFn: async () => {
+            const response = await chaptersService.getChaptersStats();
+            return response;
+        },
+        staleTime: 5 * 60 * 1000, // 5 minutes
+    });
+};
+
+export const useChaptersChartData = (days: number = 30) => {
+    return useQuery({
+        queryKey: ['admin', 'chapters', 'chart-data', days],
+        queryFn: async () => {
+            const response = await chaptersService.getChaptersChartData(days);
+            return response;
+        },
+        staleTime: 5 * 60 * 1000, // 5 minutes
     });
 };
 

@@ -190,5 +190,73 @@ export class UsersService {
       },
     });
   }
+
+  async getUserStats(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        _count: {
+          select: {
+            authoredStories: true,
+            follows: true,
+            favorites: true,
+            readingHistory: true,
+            comments: true,
+            ratings: true,
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User không tồn tại');
+    }
+
+    // Get total views from authored stories
+    const authoredStories = await this.prisma.story.findMany({
+      where: { authorId: userId },
+      select: { viewCount: true },
+    });
+
+    const totalViews = authoredStories.reduce((sum, story) => sum + story.viewCount, 0);
+
+    return {
+      storiesCount: user._count.authoredStories,
+      followsCount: user._count.follows,
+      favoritesCount: user._count.favorites,
+      readingHistoryCount: user._count.readingHistory,
+      commentsCount: user._count.comments,
+      ratingsCount: user._count.ratings,
+      totalViews,
+    };
+  }
+
+  async getPublicProfile(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        username: true,
+        displayName: true,
+        avatar: true,
+        bio: true,
+        createdAt: true,
+        _count: {
+          select: {
+            authoredStories: true,
+            follows: true,
+            favorites: true,
+            readingHistory: true,
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User không tồn tại');
+    }
+
+    return user;
+  }
 }
 

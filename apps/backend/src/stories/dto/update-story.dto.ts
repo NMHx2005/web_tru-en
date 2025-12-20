@@ -47,5 +47,9 @@ export class UpdateStoryDto {
   @IsOptional()
   @IsString()
   country?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isRecommended?: boolean;
 }
 

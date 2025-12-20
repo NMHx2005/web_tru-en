@@ -1,43 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { ProtectedRoute } from '@/components/layouts/protected-route';
 import { Header } from '@/components/layouts/header';
 import { Sidebar } from '@/components/layouts/sidebar';
 import { Footer } from '@/components/layouts/footer';
-import { Loading, BookCardSkeleton } from '@/components/ui/loading';
-
-interface Book {
-  id: string;
-  title: string;
-  author: string;
-  viewCount: number;
-  coverImage?: string | null;
-  slug?: string;
-}
-
-interface ReadingHistoryItem {
-  bookId: string;
-  lastReadAt: string;
-  progress: number;
-  chapter: string;
-}
-
-interface BookData {
-  books: Book[];
-  readingHistory: ReadingHistoryItem[];
-}
-
-function formatViewCount(count: number): string {
-  if (count >= 1000000) {
-    return `${(count / 1000000).toFixed(1)}M`;
-  }
-  if (count >= 1000) {
-    return `${(count / 1000).toFixed(1)}K`;
-  }
-  return count.toString();
-}
+import { Loading } from '@/components/ui/loading';
+import { useReadingHistory, useClearHistory } from '@/lib/api/hooks/use-reading-history';
+import { useToast } from '@/components/ui/toast';
+import { ConfirmModal } from '@/components/ui/confirm-modal';
 
 function formatDate(dateString: string): string {
   const date = new Date(dateString);
@@ -63,66 +36,28 @@ function formatDate(dateString: string): string {
   }
 }
 
-const DEFAULT_ITEMS_PER_PAGE = 20;
-const ITEMS_PER_PAGE_OPTIONS = [5, 10, 20, 30, 50];
+function HistoryContent() {
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+  const [showClearModal, setShowClearModal] = useState(false);
+  const { showToast } = useToast();
 
-export default function HistoryPage() {
-  const [historyItems, setHistoryItems] = useState<(Book & ReadingHistoryItem)[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(DEFAULT_ITEMS_PER_PAGE);
+  const { data: historyData, isLoading } = useReadingHistory({ page, limit });
+  const clearHistoryMutation = useClearHistory();
 
-  useEffect(() => {
-    const fetchHistory = async () => {
-      try {
-        const response = await fetch('/db.json');
-        const data: BookData = await response.json();
+  const history = historyData?.data || [];
+  const meta = historyData?.meta;
 
-        // Map book IDs to book objects
-        const bookMap = new Map(data.books.map((book) => [book.id, book]));
-
-        // Combine history items with book data
-        const history = data.readingHistory
-          .map((item) => {
-            const book = bookMap.get(item.bookId);
-            if (book) {
-              return { ...book, ...item };
-            }
-            return null;
-          })
-          .filter((item): item is Book & ReadingHistoryItem => item !== null)
-          // Sort by lastReadAt (most recent first)
-          .sort((a, b) => new Date(b.lastReadAt).getTime() - new Date(a.lastReadAt).getTime());
-
-        setHistoryItems(history);
-      } catch (error) {
-        console.error('Error fetching reading history:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchHistory();
-  }, []);
-
-  // Pagination calculations
-  const totalPages = Math.ceil(historyItems.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedItems = historyItems.slice(startIndex, endIndex);
-
-  // Handle page change
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+  const handleClearHistory = async () => {
+    try {
+      await clearHistoryMutation.mutateAsync();
+      showToast('Đã xóa lịch sử đọc thành công', 'success');
+      setShowClearModal(false);
+    } catch (error) {
+      showToast('Có lỗi xảy ra khi xóa lịch sử', 'error');
+    }
   };
 
-  // Handle items per page change
-  const handleItemsPerPageChange = (value: number) => {
-    setItemsPerPage(value);
-    setCurrentPage(1); // Reset to first page when changing items per page
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
 
   return (
     <div className="min-h-screen bg-[#FFF2F8] dark:bg-gray-900 transition-colors duration-300">
@@ -137,49 +72,49 @@ export default function HistoryPage() {
                 <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">
                   Lịch sử đọc
                 </h1>
-                {!isLoading && historyItems.length > 0 && (
+                {!isLoading && history.length > 0 && (
                   <div className="flex items-center gap-3">
                     <label className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
                       Hiển thị:
                     </label>
                     <select
-                      value={itemsPerPage}
-                      onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
+                      value={limit}
+                      onChange={(e) => {
+                        setLimit(Number(e.target.value));
+                        setPage(1);
+                      }}
                       className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 transition-colors duration-300 cursor-pointer"
                     >
-                      {ITEMS_PER_PAGE_OPTIONS.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
+                      <option value="10">10</option>
+                      <option value="20">20</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
                     </select>
                     <span className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
                       / trang
                     </span>
+                    <button
+                      onClick={() => setShowClearModal(true)}
+                      className="px-3 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors"
+                    >
+                      Xóa lịch sử
+                    </button>
                   </div>
                 )}
               </div>
               <p className="text-sm md:text-base text-gray-600 dark:text-gray-400">
                 {isLoading
                   ? 'Đang tải...'
-                  : `${historyItems.length} truyện đã đọc${totalPages > 1 ? ` (Trang ${currentPage}/${totalPages})` : ''}`}
+                  : `${meta?.total || 0} truyện đã đọc${meta && meta.totalPages > 1 ? ` (Trang ${page}/${meta.totalPages})` : ''}`}
               </p>
             </div>
 
             {/* Loading State */}
             {isLoading ? (
-              <div className="space-y-4">
-                {Array.from({ length: 6 }).map((_, index) => (
-                  <div key={index} className="flex gap-4 p-4 bg-white dark:bg-gray-800 rounded-lg">
-                    <BookCardSkeleton />
-                    <div className="flex-1 space-y-2">
-                      <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
-                      <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
-                    </div>
-                  </div>
-                ))}
+              <div className="flex items-center justify-center py-12">
+                <Loading />
               </div>
-            ) : historyItems.length === 0 ? (
+            ) : history.length === 0 ? (
               /* Empty State */
               <div className="flex flex-col items-center justify-center py-16 md:py-24">
                 <div className="w-24 h-24 md:w-32 md:h-32 mb-6 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
@@ -208,197 +143,142 @@ export default function HistoryPage() {
               <>
                 {/* History List */}
                 <div className="space-y-4">
-                  {paginatedItems.map((item) => (
-                    <Link
-                      key={item.id}
-                      href={item.slug ? `/books/${item.slug}` : `/books/${item.id}`}
-                      className="group flex gap-4 p-4 bg-white dark:bg-gray-800 rounded-lg hover:shadow-lg transition-all duration-300 hover:scale-[1.02]"
-                    >
-                      {/* Book Cover */}
-                      <div className="relative w-20 h-28 md:w-24 md:h-32 flex-shrink-0 rounded-lg overflow-hidden bg-gray-200 dark:bg-gray-700">
-                        {item.coverImage ? (
-                          <Image
-                            src={item.coverImage}
-                            alt={item.title}
-                            fill
-                            className="object-cover transition-transform duration-300 group-hover:scale-110"
-                            sizes="96px"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <svg
-                              width="40"
-                              height="40"
-                              viewBox="0 0 60 60"
-                              fill="none"
-                              className="text-gray-400 dark:text-gray-500"
-                            >
-                              <path
-                                d="M50 5L50 55L30 45.3594L10 55L10 5L50 5Z"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                              <path
-                                d="M30 5V45.3594"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                            </svg>
+                  {history.map((item) => {
+                    if (!item.story || !item.chapter) return null;
+                    return (
+                      <Link
+                        key={item.id}
+                        href={`/stories/${item.story.slug}/chapters/${item.chapter.slug}`}
+                        className="group flex gap-4 p-4 bg-white dark:bg-gray-800 rounded-lg hover:shadow-lg transition-all duration-300 hover:scale-[1.01]"
+                      >
+                        {/* Story Cover */}
+                        {item.story.coverImage && (
+                          <div className="relative w-20 h-28 md:w-24 md:h-32 flex-shrink-0 rounded-lg overflow-hidden bg-gray-200 dark:bg-gray-700">
+                            <Image
+                              src={item.story.coverImage}
+                              alt={item.story.title}
+                              fill
+                              className="object-cover transition-transform duration-300 group-hover:scale-110"
+                              sizes="96px"
+                            />
                           </div>
                         )}
-                      </div>
 
-                      {/* Book Info */}
-                      <div className="flex-1 flex flex-col justify-between min-w-0">
-                        <div>
-                          <h3 className="text-base md:text-lg font-semibold text-gray-900 dark:text-white mb-1 line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                            {item.title}
-                          </h3>
-                          <div className="flex items-center gap-4 text-xs md:text-sm text-gray-600 dark:text-gray-400 mb-2">
-                            <div className="flex items-center gap-1">
-                              <svg
-                                width="14"
-                                height="14"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              >
-                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                                <circle cx="12" cy="12" r="3" />
-                              </svg>
-                              <span>{formatViewCount(item.viewCount)} lượt xem</span>
+                        {/* Story Info */}
+                        <div className="flex-1 flex flex-col justify-between min-w-0">
+                          <div>
+                            <h3 className="text-base md:text-lg font-semibold text-gray-900 dark:text-white mb-1 line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                              {item.story.title}
+                            </h3>
+                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                              {item.chapter.title}
+                            </p>
+                          </div>
+
+                          {/* Progress Info */}
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between text-xs md:text-sm">
+                              <span className="text-gray-600 dark:text-gray-400">Tiến độ đọc</span>
+                              <span className="text-gray-600 dark:text-gray-400">{formatDate(item.lastRead)}</span>
+                            </div>
+                            {/* Progress Bar */}
+                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                              <div
+                                className="bg-blue-500 dark:bg-blue-600 h-2 rounded-full transition-all duration-300"
+                                style={{ width: `${item.storyProgress ?? item.progress}%` }}
+                              />
+                            </div>
+                            <div className="text-xs text-gray-500 dark:text-gray-500 text-right">
+                              {item.storyProgress ?? item.progress}% hoàn thành
                             </div>
                           </div>
                         </div>
 
-                        {/* Progress Info */}
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between text-xs md:text-sm">
-                            <span className="text-gray-600 dark:text-gray-400">{item.chapter}</span>
-                            <span className="text-gray-600 dark:text-gray-400">{formatDate(item.lastReadAt)}</span>
-                          </div>
-                          {/* Progress Bar */}
-                          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                            <div
-                              className="bg-blue-500 dark:bg-blue-600 h-2 rounded-full transition-all duration-300"
-                              style={{ width: `${item.progress}%` }}
-                            />
-                          </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-500 text-right">
-                            {item.progress}% hoàn thành
-                          </div>
+                        {/* Continue Reading Button */}
+                        <div className="flex items-center flex-shrink-0">
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              window.location.href = `/stories/${item.story!.slug}/chapters/${item.chapter!.slug}`;
+                            }}
+                            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors duration-300 whitespace-nowrap"
+                          >
+                            Đọc tiếp
+                          </button>
                         </div>
-                      </div>
-
-                      {/* Continue Reading Button */}
-                      <div className="flex items-center flex-shrink-0">
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault();
-                            window.location.href = item.slug ? `/books/${item.slug}` : `/books/${item.id}`;
-                          }}
-                          className="px-4 py-2 bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors duration-300 whitespace-nowrap"
-                        >
-                          Đọc tiếp
-                        </button>
-                      </div>
-                    </Link>
-                  ))}
+                      </Link>
+                    );
+                  })}
                 </div>
 
                 {/* Pagination */}
-                {totalPages > 1 && (
-                  <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <div className="text-sm text-gray-600 dark:text-gray-400">
-                      Hiển thị {startIndex + 1}-{Math.min(endIndex, historyItems.length)} trong tổng số {historyItems.length} truyện
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {/* Previous Button */}
-                      <button
-                        onClick={() => handlePageChange(currentPage - 1)}
-                        disabled={currentPage === 1}
-                        className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-300"
-                        aria-label="Trang trước"
-                      >
-                        <svg
-                          width="20"
-                          height="20"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <path d="M15 18l-6-6 6-6" />
-                        </svg>
-                      </button>
-
-                      {/* Page Numbers */}
-                      <div className="flex items-center gap-1">
-                        {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
-                          // Show first page, last page, current page, and pages around current
-                          const showPage =
-                            page === 1 ||
-                            page === totalPages ||
-                            (page >= currentPage - 1 && page <= currentPage + 1);
-
-                          if (!showPage) {
-                            // Show ellipsis
-                            if (page === currentPage - 2 || page === currentPage + 2) {
-                              return (
-                                <span key={page} className="px-2 text-gray-500 dark:text-gray-400">
-                                  ...
-                                </span>
-                              );
-                            }
-                            return null;
-                          }
-
-                          return (
-                            <button
-                              key={page}
-                              onClick={() => handlePageChange(page)}
-                              className={`min-w-[40px] px-3 py-2 rounded-lg border transition-colors duration-300 ${currentPage === page
-                                ? 'bg-blue-500 dark:bg-blue-600 border-blue-500 dark:border-blue-600 text-white'
-                                : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                                }`}
-                              aria-label={`Trang ${page}`}
-                              aria-current={currentPage === page ? 'page' : undefined}
-                            >
-                              {page}
-                            </button>
-                          );
-                        })}
+                {meta && meta.totalPages > 1 && (
+                  <div className="mt-8 bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                      <div className="text-sm text-gray-700 dark:text-gray-300">
+                        Hiển thị {((page - 1) * limit) + 1} - {Math.min(page * limit, meta.total)} trong tổng số {meta.total} truyện
                       </div>
-
-                      {/* Next Button */}
-                      <button
-                        onClick={() => handlePageChange(currentPage + 1)}
-                        disabled={currentPage === totalPages}
-                        className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-300"
-                        aria-label="Trang sau"
-                      >
-                        <svg
-                          width="20"
-                          height="20"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setPage(1)}
+                          disabled={page === 1}
+                          className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700 text-sm"
                         >
-                          <path d="M9 18l6-6-6-6" />
-                        </svg>
-                      </button>
+                          Đầu
+                        </button>
+                        <button
+                          onClick={() => setPage(page - 1)}
+                          disabled={!meta.hasPrev}
+                          className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700 text-sm"
+                        >
+                          Trước
+                        </button>
+                        
+                        {/* Page numbers */}
+                        <div className="flex items-center gap-1">
+                          {Array.from({ length: Math.min(5, meta.totalPages) }, (_, i) => {
+                            let pageNum: number;
+                            if (meta.totalPages <= 5) {
+                              pageNum = i + 1;
+                            } else if (page <= 3) {
+                              pageNum = i + 1;
+                            } else if (page >= meta.totalPages - 2) {
+                              pageNum = meta.totalPages - 4 + i;
+                            } else {
+                              pageNum = page - 2 + i;
+                            }
+                            
+                            return (
+                              <button
+                                key={pageNum}
+                                onClick={() => setPage(pageNum)}
+                                className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
+                                  page === pageNum
+                                    ? 'bg-blue-500 text-white border-blue-500'
+                                    : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                }`}
+                              >
+                                {pageNum}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        
+                        <button
+                          onClick={() => setPage(page + 1)}
+                          disabled={!meta.hasNext}
+                          className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700 text-sm"
+                        >
+                          Sau
+                        </button>
+                        <button
+                          onClick={() => setPage(meta.totalPages)}
+                          disabled={page === meta.totalPages}
+                          className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700 text-sm"
+                        >
+                          Cuối
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -408,7 +288,27 @@ export default function HistoryPage() {
         </main>
         <Footer />
       </div>
+
+      {/* Clear History Modal */}
+      <ConfirmModal
+        isOpen={showClearModal}
+        onClose={() => setShowClearModal(false)}
+        onConfirm={handleClearHistory}
+        title="Xóa lịch sử đọc"
+        message="Bạn có chắc chắn muốn xóa toàn bộ lịch sử đọc? Hành động này không thể hoàn tác."
+        confirmText="Xóa"
+        cancelText="Hủy"
+        confirmColor="red"
+        isLoading={clearHistoryMutation.isPending}
+      />
     </div>
   );
 }
 
+export default function HistoryPage() {
+  return (
+    <ProtectedRoute>
+      <HistoryContent />
+    </ProtectedRoute>
+  );
+}

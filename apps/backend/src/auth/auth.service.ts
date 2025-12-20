@@ -20,10 +20,16 @@ export class AuthService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private configService: ConfigService
-  ) {}
+  ) { }
 
   async register(registerDto: RegisterDto): Promise<TokenResponseDto> {
     const { email, username, password, confirmPassword, displayName } = registerDto;
+
+    // Check if registration is allowed
+    const settings = await this.prisma.settings.findFirst();
+    if (settings && !settings.allowRegistration) {
+      throw new BadRequestException('Đăng ký tài khoản mới hiện đang bị tắt. Vui lòng liên hệ quản trị viên.');
+    }
 
     // Validate password confirmation
     if (password !== confirmPassword) {
@@ -133,9 +139,10 @@ export class AuthService {
     displayName?: string | null;
     avatar?: string | null;
   } | null> {
-    // Normalize input (trim)
+    // Normalize input (trim and lowercase for email, trim only for username)
     const normalizedInput = emailOrUsername.trim();
-    
+    const isEmail = normalizedInput.includes('@');
+
     // Find user by email or username using OR condition
     // This is more efficient than separate queries
     const user = await this.prisma.user.findFirst({
@@ -144,13 +151,15 @@ export class AuthService {
           // Email lookup (case-insensitive)
           {
             email: {
-              equals: normalizedInput,
+              equals: isEmail ? normalizedInput.toLowerCase() : normalizedInput,
               mode: 'insensitive',
             },
           },
-          // Username lookup (case-sensitive)
+          // Username lookup (case-sensitive, but trim)
           {
-            username: normalizedInput,
+            username: {
+              equals: normalizedInput,
+            },
           },
         ],
       },
@@ -169,8 +178,9 @@ export class AuthService {
       throw new UnauthorizedException('Tài khoản đã bị khóa');
     }
 
-    // Verify password
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    // Verify password (trim password input to handle whitespace issues)
+    const trimmedPassword = password.trim();
+    const isPasswordValid = await bcrypt.compare(trimmedPassword, user.password);
     if (!isPasswordValid) {
       return null;
     }
@@ -188,6 +198,7 @@ export class AuthService {
     avatar?: string;
     username?: string;
     accessToken?: string;
+    needsEmail?: boolean; // Flag to indicate if email needs to be collected
   }) {
     // Find existing user by provider and providerId
     let user = await this.prisma.user.findFirst({
@@ -225,10 +236,21 @@ export class AuthService {
         });
       } else {
         // Create new user
-        const username = oauthUser.username || this.generateUsernameFromEmail(oauthUser.email);
+        // Generate username from email, but handle placeholder emails
+        let username = oauthUser.username;
+        if (!username) {
+          if (oauthUser.email.includes('@facebook.placeholder')) {
+            // For placeholder emails, use displayName or generate from providerId
+            const baseName = oauthUser.displayName?.toLowerCase().replace(/[^a-z0-9]/g, '_') ||
+              `fb_${oauthUser.providerId}`;
+            username = `${baseName}_${Math.floor(Math.random() * 10000)}`;
+          } else {
+            username = this.generateUsernameFromEmail(oauthUser.email);
+          }
+        }
         // If OAuth doesn't provide avatar, generate placeholder
         const avatar = oauthUser.avatar || this.generateAvatarPlaceholder(username, oauthUser.displayName || username);
-        
+
         user = await this.prisma.user.create({
           data: {
             email: oauthUser.email,
@@ -255,6 +277,49 @@ export class AuthService {
     const baseUsername = email.split('@')[0];
     const randomSuffix = Math.floor(Math.random() * 10000);
     return `${baseUsername}_${randomSuffix}`;
+  }
+
+  async updateEmail(userId: string, newEmail: string) {
+    // Check if email is already taken
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: newEmail },
+    });
+
+    if (existingUser && existingUser.id !== userId) {
+      throw new ConflictException('Email đã được sử dụng');
+    }
+
+    // Check if current email is a placeholder
+    const currentUser = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!currentUser) {
+      throw new UnauthorizedException('User không tồn tại');
+    }
+
+    // Update email
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: { email: newEmail },
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        displayName: true,
+        avatar: true,
+        role: true,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'Cập nhật email thành công',
+      data: {
+        user: updatedUser,
+      },
+      timestamp: new Date().toISOString(),
+    };
   }
 
   /**

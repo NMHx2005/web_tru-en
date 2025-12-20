@@ -66,6 +66,15 @@ export const useAuth = () => {
     mutationFn: (data: ChangePasswordRequest) => authService.changePassword(data),
   });
 
+  // Update email mutation
+  const updateEmailMutation = useMutation({
+    mutationFn: (email: string) => authService.updateEmail(email),
+    onSuccess: async () => {
+      // Refetch user data after updating email
+      await queryClient.refetchQueries({ queryKey: ['auth', 'me'] });
+    },
+  });
+
   return {
     user: userData,
     isLoading,
@@ -83,6 +92,8 @@ export const useAuth = () => {
     changePassword: changePasswordMutation.mutate,
     changePasswordAsync: changePasswordMutation.mutateAsync,
     isChangingPassword: changePasswordMutation.isPending,
+    updateEmail: updateEmailMutation.mutateAsync,
+    isUpdatingEmail: updateEmailMutation.isPending,
   };
 };
 

@@ -13,6 +13,21 @@ const config: Config = {
         background: 'var(--background)',
         foreground: 'var(--foreground)',
       },
+      keyframes: {
+        'slide-in-right': {
+          '0%': {
+            opacity: '0',
+            transform: 'translateX(30px)',
+          },
+          '100%': {
+            opacity: '1',
+            transform: 'translateX(0)',
+          },
+        },
+      },
+      animation: {
+        'slide-in-right': 'slide-in-right 0.3s ease-out',
+      },
     },
   },
   plugins: [],

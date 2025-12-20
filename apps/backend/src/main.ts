@@ -5,6 +5,11 @@ import * as cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { validateEnvironmentVariables } from './common/utils/env-validation';
+import { AppLoggerService } from './common/logger/logger.service';
+
+// Validate environment variables before starting
+validateEnvironmentVariables();
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -41,7 +46,8 @@ async function bootstrap() {
   );
 
   // Global exception filter
-  app.useGlobalFilters(new AllExceptionsFilter());
+  const loggerService = app.get(AppLoggerService);
+  app.useGlobalFilters(new AllExceptionsFilter(loggerService));
 
   const port = configService.get('PORT') || 3001;
   await app.listen(port);

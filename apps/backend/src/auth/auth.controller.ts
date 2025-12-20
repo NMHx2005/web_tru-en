@@ -17,6 +17,7 @@ import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { UpdateEmailDto } from './dto/update-email.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -101,6 +102,16 @@ export class AuthController {
     };
   }
 
+  @Post('update-email')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async updateEmail(
+    @CurrentUser() user: any,
+    @Body() updateEmailDto: UpdateEmailDto
+  ) {
+    return this.authService.updateEmail(user.id, updateEmailDto.email);
+  }
+
   // OAuth Routes
   @Public()
   @Get('google')
@@ -112,7 +123,6 @@ export class AuthController {
   @Public()
   @Get('google/callback')
   @UseGuards(AuthGuard('google'))
-  @UseInterceptors(CookieInterceptor)
   async googleAuthCallback(@Req() req: Request, @Res() res: Response) {
     const user = req.user as any;
     if (!user || !user.id || !user.email || !user.username || !user.role) {
@@ -124,6 +134,24 @@ export class AuthController {
       username: user.username,
       role: user.role,
     });
+
+    // Set cookies manually (don't use CookieInterceptor for redirects)
+    const isProduction = process.env.NODE_ENV === 'production';
+    res.cookie('access_token', tokens.accessToken, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      path: '/',
+    });
+    res.cookie('refresh_token', tokens.refreshToken, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+      path: '/',
+    });
+
     const redirectUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     res.redirect(`${redirectUrl}/auth/callback?token=${tokens.accessToken}`);
   }
@@ -138,20 +166,47 @@ export class AuthController {
   @Public()
   @Get('facebook/callback')
   @UseGuards(AuthGuard('facebook'))
-  @UseInterceptors(CookieInterceptor)
   async facebookAuthCallback(@Req() req: Request, @Res() res: Response) {
     const user = req.user as any;
     if (!user || !user.id || !user.email || !user.username || !user.role) {
       throw new UnauthorizedException('Authentication failed');
     }
+
+    // Check if user needs to provide email (placeholder email detected)
+    const needsEmail = user.email?.includes('@facebook.placeholder');
+
     const tokens = await this.authService.generateTokens({
       id: user.id,
       email: user.email,
       username: user.username,
       role: user.role,
     });
+
+    // Set cookies manually (don't use CookieInterceptor for redirects)
+    const isProduction = process.env.NODE_ENV === 'production';
+    res.cookie('access_token', tokens.accessToken, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      path: '/',
+    });
+    res.cookie('refresh_token', tokens.refreshToken, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+      path: '/',
+    });
+
     const redirectUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    res.redirect(`${redirectUrl}/auth/callback?token=${tokens.accessToken}`);
+
+    // If user needs email, redirect to email collection page
+    if (needsEmail) {
+      res.redirect(`${redirectUrl}/auth/complete-email?token=${tokens.accessToken}&needsEmail=true`);
+    } else {
+      res.redirect(`${redirectUrl}/auth/callback?token=${tokens.accessToken}`);
+    }
   }
 }
 

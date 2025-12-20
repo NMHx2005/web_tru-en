@@ -353,6 +353,115 @@ Chương này có khoảng 200 từ để test tính năng đếm từ và thờ
   console.log(`Categories: ${createdCategories.length} categories created`);
   console.log(`Stories:    ${createdStories.length} stories created`);
   console.log(`Chapters:   ${createdStories.length * 5} chapters created`);
+
+  // Seed Pages
+  console.log('📄 Seeding pages...');
+  const pages = [
+    {
+      slug: 'lien-he-quang-cao',
+      title: 'Liên hệ quảng cáo – Dành cho doanh nghiệp và cá nhân',
+      description: 'Thông tin liên hệ quảng cáo trên nền tảng HÙNG YÊU',
+      content: `<p><strong>HÙNG YÊU</strong> là nền tảng giải trí nội dung số gồm truyện, phim truyện và sách, sở hữu cộng đồng người dùng yêu thích nghệ thuật, giải trí và sáng tạo. Chúng tôi cung cấp các giải pháp quảng cáo linh hoạt, phù hợp cho doanh nghiệp và cá nhân có nhu cầu quảng bá thương hiệu, sản phẩm hoặc dịch vụ đến đúng nhóm khách hàng tiềm năng.</p>
+<p>Với nhiều hình thức quảng cáo đa dạng như banner, bài viết giới thiệu, tài trợ nội dung, gắn thương hiệu trong truyện – phim – sách, <strong>HÙNG YÊU</strong> cam kết mang lại hiệu quả truyền thông rõ ràng, minh bạch và tối ưu chi phí. Đội ngũ của chúng tôi sẵn sàng tư vấn giải pháp phù hợp nhất với mục tiêu kinh doanh của bạn.</p>
+<p><strong>📩 Liên hệ quảng cáo:</strong></p>
+<p><strong>Email:</strong> congtyhungyeu@gmail.com</p>
+<p><strong>Hotline/Zalo:</strong> 0349740717</p>
+<p><strong>HÙNG YÊU</strong> – Kết nối thương hiệu với cộng đồng yêu nghệ thuật và giải trí.</p>
+<h2>Thông tin Website</h2>
+<p>Tổng 1000 người dùng</p>
+<p>Trên 5.000 người dùng truy cập mỗi tháng</p>`,
+      isActive: true,
+    },
+    {
+      slug: 'doi-tac-hop-tac',
+      title: 'Đối tác hợp tác',
+      description: 'Thông tin về đối tác hợp tác với HÙNG YÊU',
+      content: `<p><strong>HÙNG YÊU</strong> mong muốn hợp tác cùng các đối tác, doanh nghiệp và cá nhân hoạt động trong lĩnh vực sáng tạo nội dung, xuất bản, truyền thông, quảng cáo, công nghệ và giải trí. Chúng tôi hướng tới xây dựng mối quan hệ hợp tác lâu dài, minh bạch và cùng phát triển, dựa trên giá trị sáng tạo và lợi ích bền vững cho các bên.</p>
+<p>Các hình thức hợp tác tại <strong>HÙNG YÊU</strong> bao gồm: đồng sản xuất truyện, phim, sách; phát hành và phân phối nội dung; tài trợ – quảng bá thương hiệu; hợp tác truyền thông và phát triển nền tảng công nghệ. Với cộng đồng người dùng ngày càng mở rộng và định hướng phát triển rõ ràng, <strong>HÙNG YÊU</strong> là cầu nối giúp đối tác tiếp cận hiệu quả thị trường và lan tỏa giá trị đến công chúng.</p>
+<p><strong>🤝 HÙNG YÊU</strong> – Hợp tác cùng phát triển, sáng tạo cùng tương lai.</p>
+<p><strong>📩 Liên hệ hợp tác cùng nhau phát triển.</strong></p>
+<p><strong>Email:</strong> congtyhungyeu@gmail.com</p>
+<p><strong>Hotline/Zalo:</strong> 0349740717</p>
+<p>Các dự án truyện, phim, sách thuộc <strong>HÙNG YÊU</strong> rất cần các đối tác hợp tác cùng nhau phát triển. Cảm ơn các đối tác.</p>`,
+      isActive: true,
+    },
+    {
+      slug: 'dang-ky-tac-gia',
+      title: 'Đăng kí tác giả',
+      description: 'Thông tin đăng ký trở thành tác giả trên HÙNG YÊU',
+      content: `<p><strong>HÙNG YÊU</strong> trân trọng chào đón các tác giả viết truyện, kịch bản phim và sách ở mọi thể loại – từ sáng tác giải trí, nghệ thuật đến những tác phẩm mang giá trị nhân văn và chiều sâu cảm xúc. Khi đăng ký trở thành tác giả của <strong>HÙNG YÊU</strong>, bạn sẽ có cơ hội đưa tác phẩm của mình đến với cộng đồng độc giả rộng lớn thông qua nền tảng đọc truyện, xem phim truyện và đọc sách hiện đại, chuyên nghiệp.</p>
+<p>Chúng tôi cam kết tôn trọng bản quyền, minh bạch trong hợp tác, hỗ trợ quảng bá tác phẩm và tạo môi trường sáng tạo bền vững để mỗi tác giả yên tâm phát triển con đường nghệ thuật của mình. <strong>HÙNG YÊU</strong> không chỉ là nơi đăng tải tác phẩm, mà còn là ngôi nhà chung nuôi dưỡng đam mê sáng tác và lan tỏa giá trị tinh thần tích cực đến cộng đồng.</p>
+<p><strong>📩 Gửi Cv và thông tin cho chúng tôi. Cảm ơn bạn</strong></p>
+<p><strong>Email:</strong> congtyhungyeu@gmail.com</p>
+<p><strong>Hotline/Zalo:</strong> 0349740717</p>
+<p><strong>HÙNG YÊU</strong> – Đồng hành cùng tác giả, lan tỏa nghệ thuật đến tâm hồn mọi người</p>`,
+      isActive: true,
+    },
+    {
+      slug: 'gop-y-phan-anh',
+      title: 'Góp ý phản ánh',
+      description: 'Gửi góp ý và phản ánh về nền tảng HÙNG YÊU',
+      content: `<p><strong>HÙNG YÊU</strong> luôn trân trọng mọi ý kiến đóng góp và phản ánh từ người dùng, tác giả, đối tác và cộng đồng. Những chia sẻ của bạn là cơ sở quan trọng giúp chúng tôi không ngừng hoàn thiện nền tảng, nâng cao chất lượng nội dung, dịch vụ và trải nghiệm người dùng.</p>
+<p>Nếu bạn có góp ý, phản ánh, khiếu nại hoặc đề xuất cải tiến, vui lòng liên hệ với <strong>HÙNG YÊU</strong> qua các kênh hỗ trợ chính thức. Chúng tôi cam kết tiếp nhận, xem xét và phản hồi một cách nghiêm túc, minh bạch và trong thời gian sớm nhất.</p>
+<p><strong>📩 Kênh tiếp nhận góp ý – phản ánh:</strong></p>
+<p><strong>Email:</strong> congtyhungyeu@gmail.com</p>
+<p><strong>Hotline/Zalo:</strong> 0349740717</p>
+<p><strong>👉 HÙNG YÊU</strong> – Lắng nghe để phát triển, đồng hành cùng cộng đồng.</p>`,
+      isActive: true,
+    },
+    {
+      slug: 'gioi-thieu',
+      title: 'Giới thiệu',
+      description: 'Thông tin về nền tảng HÙNG YÊU',
+      content: `<p><strong>HÙNG YÊU</strong> là nền tảng giải trí số cung cấp truyện chữ, truyện tranh, phim truyện và sách đọc dành cho mọi lứa tuổi. Chúng tôi mang sứ mệnh đưa nghệ thuật, câu chuyện và giá trị tinh thần đến gần hơn với cộng đồng, tạo nên không gian giải trí lành mạnh, sáng tạo và giàu cảm xúc. <strong>HÙNG YÊU</strong> hướng đến việc kết nối tâm hồn con người thông qua từng trang truyện, từng thước phim và từng tác phẩm văn học.</p>
+<p><strong>CÙNG NHAU XÂY DỰNG CỘNG ĐỒNG YÊU ĐỜI, YÊU CON NGƯỜI, YÊU NGHỆ THẬT, YÊU TRUYỆN, YÊU PHIM, YÊU SÁCH…XIN TRÂN THÀNH CẢM ƠN</strong></p>`,
+      isActive: true,
+    },
+    {
+      slug: 'ung-ho',
+      title: 'Ủng hộ',
+      description: 'Thông tin ủng hộ và đóng góp cho HÙNG YÊU',
+      content: `<p><strong>HÙNG YÊU</strong> rất mong nhận được sự ủng hộ từ cộng đồng, doanh nghiệp và những người yêu nghệ thuật để cùng chúng tôi thực hiện các dự án làm phim, viết truyện, sáng tác sách và phát triển nội dung giải trí mang giá trị nhân văn. Mỗi sự ủng hộ của bạn đều là nguồn động viên to lớn, giúp các tác giả và nhà sáng tạo có thêm điều kiện để nuôi dưỡng đam mê và cho ra đời những tác phẩm chất lượng.</p>
+<p>Sự đồng hành của bạn không chỉ góp phần phát triển nền tảng <strong>HÙNG YÊU</strong>, mà còn chung tay lan tỏa nghệ thuật, cảm xúc và giá trị tinh thần tích cực đến cộng đồng.</p>
+<p><strong>❤️ HÙNG YÊU</strong> – Trân trọng mọi sự ủng hộ, cùng nhau kiến tạo những tác phẩm chạm đến tâm hồn.</p>
+<h2>Thông tin ủng hộ</h2>
+<p><strong>Rất mong mọi người ghi rõ Họ và Tên cũng như Biệt Danh</strong></p>
+<p><strong>Lưu ý:</strong> Ghi chú ủng hộ vì lý do gì, ủng hộ tác phẩm nào và vì sao</p>
+<p>(Ví dụ ủng hộ bộ truyển, phim, sách nào đó để mong phát hành sách hoặc làm phim)</p>
+<p>Cảm ơn tất cả mọi người.</p>`,
+      isActive: true,
+    },
+    {
+      slug: 'ban-quyen',
+      title: 'Bản quyền',
+      description: 'Thông tin về bản quyền nội dung trên HÙNG YÊU',
+      content: `<p><strong>HÙNG YÊU</strong> cam kết tôn trọng và bảo vệ tuyệt đối quyền sở hữu trí tuệ đối với mọi nội dung được đăng tải trên nền tảng, bao gồm truyện, kịch bản phim, phim truyện, sách và các tác phẩm sáng tạo khác. Tất cả tác giả khi tham gia đều được ghi nhận quyền tác giả theo đúng quy định của pháp luật.</p>
+<p>Nghiêm cấm mọi hành vi sao chép, chỉnh sửa, phát tán, khai thác hoặc sử dụng nội dung trên <strong>HÙNG YÊU</strong> dưới bất kỳ hình thức nào khi chưa có sự đồng ý bằng văn bản từ tác giả và/hoặc <strong>HÙNG YÊU</strong>. Mọi trường hợp vi phạm bản quyền sẽ được xử lý theo quy định pháp luật hiện hành.</p>
+<p>Nếu phát hiện nội dung vi phạm bản quyền hoặc có khiếu nại liên quan đến quyền sở hữu trí tuệ, vui lòng liên hệ với chúng tôi để được tiếp nhận và giải quyết kịp thời.</p>
+<p><strong>📩 Liên hệ bản quyền:</strong></p>
+<p><strong>Email:</strong> congtyhungyeu@gmail.com</p>
+<p><strong>Hotline/Zalo:</strong> 0349740717</p>
+<p><strong>👉 HÙNG YÊU</strong> – Tôn trọng sáng tạo, bảo vệ giá trị bản quyền.</p>`,
+      isActive: true,
+    },
+    {
+      slug: 'popup-support',
+      title: 'Ủng hộ làm phim',
+      description: 'Nội dung popup ủng hộ làm phim',
+      content: `<p><span class="hidden sm:inline">Ủng hộ làm phim</span></p>`,
+      isActive: true,
+    },
+  ];
+
+  for (const pageData of pages) {
+    await prisma.page.upsert({
+      where: { slug: pageData.slug },
+      update: pageData,
+      create: pageData,
+    });
+  }
+  console.log(`✅ Created/updated ${pages.length} pages`);
+
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('\n✨ Seed completed successfully!');
 }

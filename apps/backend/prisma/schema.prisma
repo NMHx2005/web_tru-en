@@ -11,35 +11,35 @@ datasource db {
 }
 
 model User {
-  id            String           @id @default(cuid())
-  email         String           @unique
-  username      String           @unique
-  password      String?          // Nullable cho OAuth users
+  id            String   @id @default(cuid())
+  email         String   @unique
+  username      String   @unique
+  password      String? // Nullable cho OAuth users
   avatar        String?
   displayName   String?
-  bio           String?          @db.Text
-  role          UserRole         @default(USER)
-  isActive      Boolean          @default(true)
-  emailVerified Boolean          @default(false)
-  refreshToken  String?          // Optional: cho refresh token strategy
+  bio           String?  @db.Text
+  role          UserRole @default(USER)
+  isActive      Boolean  @default(true)
+  emailVerified Boolean  @default(false)
+  refreshToken  String? // Optional: cho refresh token strategy
   // OAuth fields
-  provider      String?          // 'local', 'google', 'facebook'
-  providerId    String?          // OAuth provider user ID
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
+  provider      String? // 'local', 'google', 'facebook'
+  providerId    String? // OAuth provider user ID
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   // Relations
-  uploadedChapters Chapter[]        @relation("ChapterUploader")
-  comments         Comment[]
-  favorites        Favorite[]
-  follows          Follow[]
-  ratings          Rating[]
-  readingHistory   ReadingHistory[]
-  authoredStories  Story[]          @relation("StoryAuthor")
-  viewLogs         ViewLog[]
-  approvalRequests ApprovalRequest[] @relation("ApprovalRequests")
+  uploadedChapters  Chapter[]         @relation("ChapterUploader")
+  comments          Comment[]
+  favorites         Favorite[]
+  follows           Follow[]
+  ratings           Rating[]
+  readingHistory    ReadingHistory[]
+  authoredStories   Story[]           @relation("StoryAuthor")
+  viewLogs          ViewLog[]
+  approvalRequests  ApprovalRequest[] @relation("ApprovalRequests")
   reviewedApprovals ApprovalRequest[] @relation("ReviewedApprovals")
-  createdAds       Ad[]              @relation("AdCreator")
+  createdAds        Ad[]              @relation("AdCreator")
 
   @@index([email])
   @@index([username])
@@ -50,35 +50,37 @@ model User {
 }
 
 model Story {
-  id              String          @id @default(cuid())
-  title           String
-  slug            String          @unique
-  description     String?
-  coverImage      String?
-  authorId        String
-  authorName      String?
-  status          StoryStatus     @default(DRAFT)
-  isPublished     Boolean         @default(false)
-  viewCount       Int             @default(0)
-  likeCount       Int             @default(0)
-  followCount     Int             @default(0)
-  rating          Float           @default(0)
-  ratingCount     Int             @default(0)
-  country         String?
-  tags            String[]
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  lastChapterAt   DateTime?
-  chapters        Chapter[]
-  comments        Comment[]
-  favorites       Favorite[]
-  follows         Follow[]
-  ratings         Rating[]
-  author          User            @relation("StoryAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-  storyCategories StoryCategory[]
-  storyTags       StoryTag[]
-  viewLogs        ViewLog[]
+  id               String            @id @default(cuid())
+  title            String
+  slug             String            @unique
+  description      String?
+  coverImage       String?
+  authorId         String
+  authorName       String?
+  status           StoryStatus       @default(DRAFT)
+  isPublished      Boolean           @default(false)
+  viewCount        Int               @default(0)
+  likeCount        Int               @default(0)
+  followCount      Int               @default(0)
+  rating           Float             @default(0)
+  ratingCount      Int               @default(0)
+  isRecommended    Boolean           @default(false)
+  country          String?
+  tags             String[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  lastChapterAt    DateTime?
+  chapters         Chapter[]
+  comments         Comment[]
+  favorites        Favorite[]
+  follows          Follow[]
+  ratings          Rating[]
+  author           User              @relation("StoryAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  storyCategories  StoryCategory[]
+  storyTags        StoryTag[]
+  viewLogs         ViewLog[]
   approvalRequests ApprovalRequest[] @relation("StoryApprovals")
+  readingHistory   ReadingHistory[]
 
   @@index([slug])
   @@index([authorId])
@@ -91,29 +93,33 @@ model Story {
   @@index([rating])
   @@index([viewCount])
   @@index([followCount])
+  @@index([isPublished, status, createdAt]) // Composite for homepage queries
+  @@index([isPublished, rating, ratingCount]) // Composite for top rated
+  @@index([isPublished, likeCount, followCount]) // Composite for most liked
+  @@index([isRecommended, isPublished, createdAt]) // Composite for recommended
   @@map("stories")
 }
 
 model Chapter {
-  id             String           @id @default(cuid())
-  storyId        String
-  title          String
-  slug           String
-  content        String
-  images         String[]
-  order          Int
-  isPublished    Boolean          @default(false)
-  viewCount      Int              @default(0)
-  wordCount      Int              @default(0)
-  readingTime    Int              @default(0)
-  uploaderId     String?
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-  story          Story            @relation(fields: [storyId], references: [id], onDelete: Cascade)
-  uploader       User?            @relation("ChapterUploader", fields: [uploaderId], references: [id])
-  comments       Comment[]
-  readingHistory ReadingHistory[]
-  viewLogs       ViewLog[]
+  id               String            @id @default(cuid())
+  storyId          String
+  title            String
+  slug             String
+  content          String
+  images           String[]
+  order            Int
+  isPublished      Boolean           @default(false)
+  viewCount        Int               @default(0)
+  wordCount        Int               @default(0)
+  readingTime      Int               @default(0)
+  uploaderId       String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  story            Story             @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  uploader         User?             @relation("ChapterUploader", fields: [uploaderId], references: [id])
+  comments         Comment[]
+  readingHistory   ReadingHistory[]
+  viewLogs         ViewLog[]
   approvalRequests ApprovalRequest[] @relation("ChapterApprovals")
 
   @@unique([storyId, slug])
@@ -147,6 +153,9 @@ model Comment {
   @@index([parentId])
   @@index([createdAt])
   @@index([isDeleted])
+  @@index([storyId, isDeleted, createdAt]) // Composite index for story comments query
+  @@index([chapterId, isDeleted, createdAt]) // Composite index for chapter comments query
+  @@index([parentId, createdAt]) // Composite index for nested replies
   @@map("comments")
 }
 
@@ -181,20 +190,21 @@ model Category {
 model ReadingHistory {
   id        String   @id @default(cuid())
   userId    String
-  chapterId String
-  storyId   String?
-  progress  Int      @default(0)
+  chapterId String // Current chapter being read
+  storyId   String // Story this history belongs to (required)
+  progress  Int      @default(0) // Progress of current chapter (0-100)
   lastRead  DateTime @default(now())
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   chapter   Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  story     Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, chapterId])
+  @@unique([userId, storyId]) // One history entry per user per story
   @@index([userId])
   @@index([userId, lastRead])
-  @@index([chapterId])
   @@index([storyId])
+  @@index([chapterId])
   @@map("reading_history")
 }
 
@@ -329,22 +339,22 @@ model ContentReport {
 }
 
 model ApprovalRequest {
-  id          String            @id @default(cuid())
-  userId      String
-  storyId     String?
-  chapterId   String?
-  type        ApprovalType
-  status      ApprovalStatus    @default(PENDING)
-  message     String?           @db.Text
-  adminNote   String?           @db.Text
-  reviewedBy  String?
-  reviewedAt  DateTime?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-  user        User              @relation("ApprovalRequests", fields: [userId], references: [id], onDelete: Cascade)
-  story       Story?            @relation("StoryApprovals", fields: [storyId], references: [id], onDelete: Cascade)
-  chapter     Chapter?          @relation("ChapterApprovals", fields: [chapterId], references: [id], onDelete: Cascade)
-  reviewer    User?             @relation("ReviewedApprovals", fields: [reviewedBy], references: [id])
+  id         String         @id @default(cuid())
+  userId     String
+  storyId    String?
+  chapterId  String?
+  type       ApprovalType
+  status     ApprovalStatus @default(PENDING)
+  message    String?        @db.Text
+  adminNote  String?        @db.Text
+  reviewedBy String?
+  reviewedAt DateTime?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  user       User           @relation("ApprovalRequests", fields: [userId], references: [id], onDelete: Cascade)
+  story      Story?         @relation("StoryApprovals", fields: [storyId], references: [id], onDelete: Cascade)
+  chapter    Chapter?       @relation("ChapterApprovals", fields: [chapterId], references: [id], onDelete: Cascade)
+  reviewer   User?          @relation("ReviewedApprovals", fields: [reviewedBy], references: [id])
 
   @@index([userId])
   @@index([storyId])
@@ -388,22 +398,23 @@ enum ApprovalStatus {
 }
 
 model Ad {
-  id          String    @id @default(cuid())
-  title       String?
-  description String?   @db.Text
-  imageUrl    String
-  linkUrl     String?
-  type        AdType    @default(BANNER)
-  position    AdPosition @default(BOTTOM)
-  isActive    Boolean   @default(true)
-  startDate   DateTime?
-  endDate     DateTime?
-  clickCount  Int       @default(0)
-  viewCount   Int       @default(0)
-  createdById String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  createdBy   User?     @relation("AdCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  id            String     @id @default(cuid())
+  title         String?
+  description   String?    @db.Text
+  imageUrl      String
+  linkUrl       String?
+  type          AdType     @default(BANNER)
+  position      AdPosition @default(BOTTOM)
+  isActive      Boolean    @default(true)
+  startDate     DateTime?
+  endDate       DateTime?
+  clickCount    Int        @default(0)
+  viewCount     Int        @default(0)
+  popupInterval Int? // Number of chapters to read before showing popup (only for POPUP type)
+  createdById   String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  createdBy     User?      @relation("AdCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([type])
   @@index([position])
@@ -426,4 +437,42 @@ enum AdPosition {
   SIDEBAR_LEFT
   SIDEBAR_RIGHT
   INLINE
+}
+
+model Page {
+  id          String   @id @default(cuid())
+  slug        String   @unique // e.g., 'lien-he-quang-cao', 'ung-ho', 'popup-support'
+  title       String
+  content     String   @db.Text // HTML content
+  description String?  @db.Text
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([slug])
+  @@index([isActive])
+  @@map("pages")
+}
+
+model Settings {
+  id                       String   @id @default(cuid())
+  siteName                 String   @default("Web Truyen Tien Hung")
+  siteDescription          String?  @db.Text
+  siteLogo                 String?
+  siteFavicon              String?
+  siteEmail                String?
+  sitePhone                String?
+  siteAddress              String?  @db.Text
+  siteFacebook             String?
+  siteTwitter              String?
+  siteYoutube              String?
+  siteInstagram            String?
+  maintenanceMode          Boolean  @default(false)
+  maintenanceMessage       String?  @db.Text
+  allowRegistration        Boolean  @default(true)
+  requireEmailVerification Boolean  @default(false)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@map("settings")
 }

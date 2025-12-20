@@ -3,9 +3,11 @@ import {
   Get,
   Patch,
   Post,
+  Delete,
   Body,
   UseGuards,
   Param,
+  Query,
   UseInterceptors,
   UploadedFile,
 } from '@nestjs/common';
@@ -19,8 +21,8 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import { ReadingHistoryService } from '../reading-history/reading-history.service';
 import { UserRole } from '@prisma/client';
-import { Query } from '@nestjs/common';
 import { memoryStorage } from 'multer';
 
 @Controller('users')
@@ -28,7 +30,8 @@ import { memoryStorage } from 'multer';
 export class UsersController {
   constructor(
     private usersService: UsersService,
-    private cloudinaryService: CloudinaryService
+    private cloudinaryService: CloudinaryService,
+    private readingHistoryService: ReadingHistoryService
   ) { }
 
   @Get('me')
@@ -74,6 +77,45 @@ export class UsersController {
       message: 'Avatar uploaded successfully',
       timestamp: new Date().toISOString(),
     };
+  }
+
+  @Get('me/stats')
+  async getMyStats(@CurrentUser() user: any) {
+    return this.usersService.getUserStats(user.id);
+  }
+
+  @Get('me/history')
+  async getMyHistory(
+    @CurrentUser() user: any,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string
+  ) {
+    return this.readingHistoryService.getHistory(
+      user.id,
+      page ? parseInt(page) : undefined,
+      limit ? parseInt(limit) : undefined
+    );
+  }
+
+  @Get('me/continue-reading')
+  async getMyContinueReading(
+    @CurrentUser() user: any,
+    @Query('limit') limit?: string
+  ) {
+    const limitNum = limit ? parseInt(limit) : 10;
+    return this.readingHistoryService.getContinueReading(user.id, limitNum);
+  }
+
+  @Delete('me/history')
+  async clearMyHistory(@CurrentUser() user: any) {
+    return this.readingHistoryService.clearHistory(user.id);
+  }
+
+  // Public routes - must be after all 'me' routes to avoid route conflicts
+  @Public()
+  @Get(':id/public')
+  async getPublicProfile(@Param('id') id: string) {
+    return this.usersService.getPublicProfile(id);
   }
 
   @Public()

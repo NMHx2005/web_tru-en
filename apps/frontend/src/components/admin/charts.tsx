@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import {
     Chart as ChartJS,
     CategoryScale,
@@ -17,18 +18,20 @@ import { Bar, Line, Doughnut } from 'react-chartjs-2';
 import { useTheme } from '@/components/providers/theme-provider';
 
 // Register Chart.js components
-ChartJS.register(
-    CategoryScale,
-    LinearScale,
-    BarElement,
-    LineElement,
-    PointElement,
-    ArcElement,
-    Title,
-    Tooltip,
-    Legend,
-    Filler
-);
+if (typeof window !== 'undefined') {
+    ChartJS.register(
+        CategoryScale,
+        LinearScale,
+        BarElement,
+        LineElement,
+        PointElement,
+        ArcElement,
+        Title,
+        Tooltip,
+        Legend,
+        Filler
+    );
+}
 
 interface ChartProps {
     data: number[];
@@ -40,6 +43,48 @@ interface ChartProps {
 
 export function Chart({ data, labels, title, type = 'bar', color = '#3b82f6' }: ChartProps) {
     const { theme } = useTheme();
+    const [isMounted, setIsMounted] = useState(false);
+
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
+
+    // Validate data
+    if (!data || !Array.isArray(data) || data.length === 0) {
+        return (
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm">
+                <div className="h-80 flex items-center justify-center text-gray-500 dark:text-gray-400">
+                    Không có dữ liệu để hiển thị
+                </div>
+            </div>
+        );
+    }
+
+    if (!labels || !Array.isArray(labels) || labels.length === 0) {
+        return (
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm">
+                <div className="h-80 flex items-center justify-center text-gray-500 dark:text-gray-400">
+                    Không có nhãn để hiển thị
+                </div>
+            </div>
+        );
+    }
+
+    // Ensure data and labels have same length
+    const minLength = Math.min(data.length, labels.length);
+    const chartDataValues = data.slice(0, minLength);
+    const chartLabels = labels.slice(0, minLength);
+
+    if (!isMounted) {
+        return (
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm">
+                <div className="h-80 flex items-center justify-center text-gray-500 dark:text-gray-400">
+                    Đang tải...
+                </div>
+            </div>
+        );
+    }
+
     const isDark = theme === 'dark';
 
     const textColor = isDark ? '#e5e7eb' : '#111827';
@@ -47,11 +92,11 @@ export function Chart({ data, labels, title, type = 'bar', color = '#3b82f6' }: 
     const bgColor = isDark ? '#1f2937' : '#ffffff';
 
     const chartData = {
-        labels,
+        labels: chartLabels,
         datasets: [
             {
                 label: title,
-                data,
+                data: chartDataValues,
                 backgroundColor:
                     type === 'doughnut'
                         ? [
@@ -106,7 +151,9 @@ export function Chart({ data, labels, title, type = 'bar', color = '#3b82f6' }: 
                 displayColors: true,
                 callbacks: {
                     label: function (context: any) {
-                        return `${context.parsed.y?.toLocaleString() || context.parsed.toLocaleString()}`;
+                        if (!context.parsed) return '';
+                        const value = context.parsed.y !== undefined ? context.parsed.y : context.parsed;
+                        return typeof value === 'number' ? value.toLocaleString() : String(value);
                     },
                 },
             },
@@ -137,7 +184,10 @@ export function Chart({ data, labels, title, type = 'bar', color = '#3b82f6' }: 
                                 size: 12,
                             },
                             callback: function (value: any) {
-                                return value.toLocaleString();
+                                if (typeof value === 'number') {
+                                    return value.toLocaleString();
+                                }
+                                return value;
                             },
                         },
                         beginAtZero: true,

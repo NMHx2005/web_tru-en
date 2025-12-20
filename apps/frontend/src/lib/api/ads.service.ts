@@ -34,6 +34,7 @@ export interface Ad {
     endDate?: string;
     clickCount: number;
     viewCount: number;
+    popupInterval?: number; // Number of chapters to read before showing popup (only for POPUP type)
     createdAt: string;
     updatedAt: string;
     createdBy?: {
@@ -48,6 +49,7 @@ export interface CreateAdRequest {
     description?: string;
     imageUrl: string;
     linkUrl?: string;
+    popupInterval?: number;
     type: AdType;
     position: AdPosition;
     isActive?: boolean;
@@ -67,11 +69,20 @@ export const adsService = {
         if (position) params.append('position', position);
 
         const response = await apiClient.get<Ad[] | ApiResponse<Ad[]>>(`/ads/active?${params.toString()}`);
-        const data = response.data as any;
-        if (Array.isArray(data)) {
-            return data;
+        const responseData = response.data as any;
+        
+        // Handle ApiResponse format: { success: true, data: [...], timestamp: ... }
+        if (responseData && typeof responseData === 'object') {
+            if (responseData.data && Array.isArray(responseData.data)) {
+                return responseData.data;
+            }
+            // If data is directly an array
+            if (Array.isArray(responseData)) {
+                return responseData;
+            }
         }
-        return (data as ApiResponse<Ad[]>).data || [];
+        
+        return [];
     },
 
     /**
