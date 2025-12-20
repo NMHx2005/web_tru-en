@@ -5,7 +5,7 @@ import { AdminLayout } from '@/components/layouts/admin-layout';
 import { Loading } from '@/components/ui/loading';
 import { RefreshButton } from '@/components/admin/refresh-button';
 import { useAdminComments, useModerateComment } from '@/lib/api/hooks/use-comments';
-import { AdminComment } from '@/lib/api/comments.service';
+import { AdminComment, AdminCommentsResponse } from '@/lib/api/comments.service';
 import { ConfirmModal } from '@/components/ui/confirm-modal';
 import { useToastContext } from '@/components/providers/toast-provider';
 import Link from 'next/link';
@@ -43,7 +43,7 @@ export default function AdminCommentsPage() {
 
     // Debug: log data to see structure
     if (data) {
-      // Debug logs removed for performance
+        // Debug logs removed for performance
     }
 
     // Handle both direct and wrapped response structures
@@ -51,14 +51,14 @@ export default function AdminCommentsPage() {
     let meta: any = null;
 
     if (data) {
-      // Check if data is already the AdminCommentsResponse structure
-      if ('data' in data && 'meta' in data) {
-        comments = (data as AdminCommentsResponse).data || [];
-        meta = (data as AdminCommentsResponse).meta;
-      } else if (Array.isArray(data)) {
-        // If data is directly an array (shouldn't happen but handle it)
-        comments = data as any;
-      }
+        // Check if data is already the AdminCommentsResponse structure
+        if ('data' in data && 'meta' in data) {
+            comments = (data as AdminCommentsResponse).data || [];
+            meta = (data as AdminCommentsResponse).meta;
+        } else if (Array.isArray(data)) {
+            // If data is directly an array (shouldn't happen but handle it)
+            comments = data as any;
+        }
     }
 
     // Debug logs removed for performance
@@ -396,11 +396,10 @@ export default function AdminCommentsPage() {
                                             </td>
                                             <td className="px-4 py-3">
                                                 <span
-                                                    className={`px-2 py-1 rounded text-xs ${
-                                                        comment.isDeleted
+                                                    className={`px-2 py-1 rounded text-xs ${comment.isDeleted
                                                             ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
                                                             : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                                                    }`}
+                                                        }`}
                                                 >
                                                     {comment.isDeleted ? 'Đã xóa' : 'Hoạt động'}
                                                 </span>
