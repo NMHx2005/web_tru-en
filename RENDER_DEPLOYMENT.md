@@ -50,9 +50,16 @@ Hướng dẫn chi tiết từng bước để deploy backend lên Render.
 | **Build Command** | `npm install && npm run build` |
 | **Start Command** | `npm run start:prod` |
 
+**⚠️ QUAN TRỌNG - Nếu bị lỗi "nest: not found"**:
+
+Thử cách này thay vì:
+- **Root Directory**: Để **TRỐNG** (hoặc `.`)
+- **Build Command**: `npm install && npm run build:backend`
+- **Start Command**: `cd apps/backend && npm run start:prod`
+
 **Lưu ý quan trọng**: 
-- Render sẽ tự động chạy `npm install` ở root trước (vì là monorepo)
-- Sau đó chạy build command trong `Root Directory` (`apps/backend`)
+- Với monorepo, tốt nhất là build từ root và dùng workspace commands
+- Render sẽ tự động chạy `npm install` ở root
 - Build script đã được cấu hình để tự động generate Prisma client
 
 **Lưu ý**: 
@@ -292,9 +299,21 @@ Nếu thấy JSON response → ✅ Deploy thành công!
    - File `apps/backend/package.json` đã được update
    - Commit và push lại code
 
-3. **Nếu vẫn lỗi**, thử build command này:
+3. **Giải pháp tốt nhất - Build từ Root**:
+   - **Root Directory**: Để **TRỐNG** (hoặc `.`)
+   - **Build Command**: `npm install && npm run build:backend`
+   - **Start Command**: `cd apps/backend && npm run start:prod`
+   
+   Cách này đảm bảo dependencies được install đúng trong monorepo.
+
+4. **Nếu vẫn dùng Root Directory = `apps/backend`**, thử build command này:
    ```
-   cd apps/backend && npm install && npx prisma generate && npx nest build
+   npm install && npx prisma generate && node ../../node_modules/.bin/nest build
+   ```
+   
+   Hoặc:
+   ```
+   npm install && cd ../.. && npm install && cd apps/backend && npm run build
    ```
 
 4. **Test build local trước**:
