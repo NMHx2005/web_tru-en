@@ -731,12 +731,12 @@ export default function AdminAdsPage() {
                                 : 'Tắt'
                     }
                     cancelText="Hủy"
-                    confirmButtonClassName={
+                    confirmColor={
                         bulkAction === 'delete'
-                            ? 'bg-red-500 hover:bg-red-600'
+                            ? 'red'
                             : bulkAction === 'activate'
-                                ? 'bg-green-500 hover:bg-green-600'
-                                : 'bg-yellow-500 hover:bg-yellow-600'
+                                ? 'green'
+                                : 'blue'
                     }
                     isLoading={bulkAction === 'delete' ? deleteMutation.isPending : updateMutation.isPending}
                 />
