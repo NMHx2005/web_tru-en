@@ -10,7 +10,7 @@
   "scripts": {
     "dev:backend": "npm run dev --workspace=apps/backend",
     "dev:frontend": "npm run dev --workspace=apps/frontend",
-    "build:backend": "npm run build --workspace=apps/backend",
+    "build:backend": "cd apps/backend && npx prisma generate && npm run build",
     "build:frontend": "npm run build --workspace=apps/frontend",
     "build:render": "cd apps/backend && npx prisma generate && npm run build",
     "lint": "npm run lint --workspaces",
