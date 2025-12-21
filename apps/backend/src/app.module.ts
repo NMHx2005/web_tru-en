@@ -24,6 +24,7 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { MiddlewareModule } from './common/middleware/middleware.module';
 import { MaintenanceMiddleware } from './common/middleware/maintenance.middleware';
 import { LoggerModule } from './common/logger/logger.module';
+import { HealthController } from './health/health.controller';
 
 @Module({
   imports: [
@@ -69,6 +70,7 @@ import { LoggerModule } from './common/logger/logger.module';
     SettingsModule,
     MiddlewareModule, // Must be imported to provide MaintenanceMiddleware
   ],
+  controllers: [HealthController],
   providers: [
     {
       provide: APP_GUARD,
