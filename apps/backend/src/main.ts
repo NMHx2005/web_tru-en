@@ -23,11 +23,27 @@ async function bootstrap() {
   app.use(cookieParser());
 
   // CORS
+  const corsOrigin = configService.get('CORS_ORIGIN');
+  const allowedOrigins = corsOrigin
+    ? corsOrigin.split(',').map(origin => origin.trim())
+    : ['http://localhost:3000'];
+
   app.enableCors({
-    origin: configService.get('CORS_ORIGIN') || 'http://localhost:3000',
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+
+      // Check if origin is in allowed list
+      if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
+    exposedHeaders: ['Set-Cookie'],
   });
 
   // Global prefix

@@ -49,8 +49,19 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async logout(@CurrentUser() user: any, @Res() res: Response) {
     await this.authService.logout(user.id);
-    res.clearCookie('access_token');
-    res.clearCookie('refresh_token');
+    const isProduction = process.env.NODE_ENV === 'production';
+    res.clearCookie('access_token', {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? 'none' : 'lax',
+      path: '/',
+    });
+    res.clearCookie('refresh_token', {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? 'none' : 'lax',
+      path: '/',
+    });
     return res.json({
       success: true,
       message: 'Đăng xuất thành công',
@@ -140,14 +151,14 @@ export class AuthController {
     res.cookie('access_token', tokens.accessToken, {
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'lax',
+      sameSite: isProduction ? 'none' : 'lax', // 'none' for cross-origin in production
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       path: '/',
     });
     res.cookie('refresh_token', tokens.refreshToken, {
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'lax',
+      sameSite: isProduction ? 'none' : 'lax', // 'none' for cross-origin in production
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
       path: '/',
     });
@@ -187,14 +198,14 @@ export class AuthController {
     res.cookie('access_token', tokens.accessToken, {
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'lax',
+      sameSite: isProduction ? 'none' : 'lax', // 'none' for cross-origin in production
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       path: '/',
     });
     res.cookie('refresh_token', tokens.refreshToken, {
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'lax',
+      sameSite: isProduction ? 'none' : 'lax', // 'none' for cross-origin in production
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
       path: '/',
     });
