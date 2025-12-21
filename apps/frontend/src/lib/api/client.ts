@@ -89,12 +89,40 @@ class ApiClient {
               return this.client(originalRequest);
             }
           } catch (refreshError) {
-            // Refresh failed, only redirect if not an auth endpoint
+            // Refresh failed - only redirect if we're on a protected route
+            // Public routes (homepage, book details, reading, search, categories) don't need auth
             if (typeof window !== 'undefined' && !isAuthEndpoint) {
-              // Only redirect if we're not already on login page
-              if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
+              const currentPath = window.location.pathname;
+
+              // Define protected routes that require authentication
+              const protectedRoutes = [
+                '/library',
+                '/profile',
+                '/history',
+                '/favorites',
+                '/follows',
+                '/author',
+              ];
+
+              // Define public routes that don't need authentication
+              const isPublicRoute =
+                currentPath === '/' ||
+                currentPath === '/login' ||
+                currentPath === '/register' ||
+                currentPath === '/maintenance' ||
+                currentPath.startsWith('/books/') ||
+                currentPath.startsWith('/stories/') ||
+                currentPath.startsWith('/search') ||
+                currentPath.startsWith('/categories') ||
+                currentPath.startsWith('/auth/');
+
+              // Only redirect if we're on a protected route
+              const isProtectedRoute = protectedRoutes.some(route => currentPath.startsWith(route));
+
+              if (isProtectedRoute && !isPublicRoute) {
                 window.location.href = '/login';
               }
+              // For public routes, just reject the error - components will handle it gracefully
             }
             return Promise.reject(refreshError);
           }
