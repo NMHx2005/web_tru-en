@@ -17,8 +17,10 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\""
   },
+  "dependencies": {
+    "@nestjs/cli": "^10.2.1"
+  },
   "devDependencies": {
-    "@nestjs/cli": "^10.2.1",
     "prettier": "^3.2.5",
     "typescript": "^5.3.3"
   },
