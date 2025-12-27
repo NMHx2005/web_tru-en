@@ -28,6 +28,12 @@ async function bootstrap() {
     ? corsOrigin.split(',').map((origin: string) => origin.trim())
     : ['http://localhost:3000'];
 
+  // Add frontend URL to allowed origins if not already included
+  const frontendUrl = configService.get('FRONTEND_URL');
+  if (frontendUrl && !allowedOrigins.includes(frontendUrl)) {
+    allowedOrigins.push(frontendUrl);
+  }
+
   app.enableCors({
     origin: (origin, callback) => {
       // Allow requests with no origin (like mobile apps or curl requests)
@@ -37,12 +43,14 @@ async function bootstrap() {
       if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
         callback(null, true);
       } else {
-        callback(new Error('Not allowed by CORS'));
+        // Log CORS errors for debugging
+        console.warn(`[CORS] Blocked origin: ${origin}. Allowed origins: ${allowedOrigins.join(', ')}`);
+        callback(new Error(`Not allowed by CORS: ${origin}`));
       }
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
     exposedHeaders: ['Set-Cookie'],
   });
 

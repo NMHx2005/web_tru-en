@@ -200,7 +200,8 @@ export class AuthService {
     accessToken?: string;
     needsEmail?: boolean; // Flag to indicate if email needs to be collected
   }) {
-    // Find existing user by provider and providerId
+    // Find existing user by provider and providerId FIRST
+    // This ensures we don't create duplicate accounts for the same OAuth provider
     let user = await this.prisma.user.findFirst({
       where: {
         provider: oauthUser.provider,
@@ -209,11 +210,20 @@ export class AuthService {
     });
 
     if (user) {
-      // Update user info if needed
+      // User already exists with this provider+providerId - return existing user
+      // Update user info if needed (avatar, displayName)
+      const updateData: any = {};
       if (oauthUser.avatar && oauthUser.avatar !== user.avatar) {
+        updateData.avatar = oauthUser.avatar;
+      }
+      if (oauthUser.displayName && oauthUser.displayName !== user.displayName) {
+        updateData.displayName = oauthUser.displayName;
+      }
+
+      if (Object.keys(updateData).length > 0) {
         user = await this.prisma.user.update({
           where: { id: user.id },
-          data: { avatar: oauthUser.avatar },
+          data: updateData,
         });
       }
     } else {
