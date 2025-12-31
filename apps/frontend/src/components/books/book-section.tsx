@@ -149,7 +149,7 @@ export function BookSection({ title, books, seeMoreLink = '#', showLikeButton = 
             scrollBehavior: 'smooth',
           }}
         >
-          <div className="flex gap-3 md:gap-4 px-0 md:px-6 pb-4 min-w-max">
+          <div className="flex gap-3 md:gap-4 px-0 md:px-6 pb-4 min-w-max" style={{ touchAction: 'auto' }}>
             {books.map((book, index) => (
               <div
                 key={book.id}
@@ -158,6 +158,7 @@ export function BookSection({ title, books, seeMoreLink = '#', showLikeButton = 
                   animationDelay: isVisible ? `${index * 50}ms` : '0ms',
                   opacity: isVisible ? 1 : 0,
                   transform: isVisible ? 'translateX(0)' : 'translateX(20px)',
+                  touchAction: 'auto',
                 }}
               >
                 <BookCard

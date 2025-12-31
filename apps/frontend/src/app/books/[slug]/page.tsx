@@ -631,12 +631,13 @@ export default function BookDetailPage() {
                       scrollBehavior: 'smooth',
                     }}
                   >
-                    <div className="flex gap-4 pb-4 min-w-max">
+                    <div className="flex gap-4 pb-4 min-w-max" style={{ touchAction: 'auto' }}>
                       {similarStories.map((relatedStory) => (
                         <Link
                           key={relatedStory.id}
                           href={`/books/${relatedStory.slug}`}
                           className="group flex-shrink-0 w-[150px] transition-all duration-500 hover:scale-105 active:scale-95 snap-start"
+                          style={{ touchAction: 'auto' }}
                         >
                           <div className="flex flex-col gap-2">
                             {/* Book Cover - Fixed size */}

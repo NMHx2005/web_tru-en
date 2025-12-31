@@ -74,9 +74,9 @@ body {
   scroll-snap-type: x mandatory;
 }
 
-/* Touch pan for mobile */
+/* Touch pan for mobile - allow both horizontal and vertical scrolling */
 .touch-pan-x {
-  touch-action: pan-x;
+  touch-action: pan-x pan-y pinch-zoom;
 }
 
 /* Snap scroll */
