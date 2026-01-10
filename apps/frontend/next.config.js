@@ -52,7 +52,7 @@ const nextConfig = {
     return [
       {
         source: '/api/:path*',
-        destination: `${backendUrl}/:path*`, // Remove /api duplication
+        destination: `${backendUrl}/api/:path*`, // Keep /api prefix for backend
       },
     ];
   },
