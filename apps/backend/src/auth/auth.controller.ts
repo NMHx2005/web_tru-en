@@ -50,10 +50,9 @@ export class AuthController {
     const isCrossOrigin = frontendDomain !== backendDomain;
     const isHttps = frontendUrl.startsWith('https://') || (req as any).protocol === 'https';
 
-    // Extract root domain for production (e.g., "hungyeu.com" from "www.hungyeu.com")
-    const rootDomain = frontendDomain.replace(/^www\./, '');
-
-    // 🍎 iOS Safari REQUIRES domain attribute for SameSite=None cookies
+    // 🍎 iOS Safari cookie options
+    // NOTE: Domain attribute causes issues with different subdomains
+    // Using SameSite=None with Secure for cross-origin
     const cookieOptions: any = {
       httpOnly: true,
       secure: isHttps,
@@ -61,11 +60,14 @@ export class AuthController {
       path: '/',
     };
 
-    // 🔥 CRITICAL for iOS: Set domain for cross-origin HTTPS cookies
-    // Only set domain in production (HTTPS + cross-origin)
-    if (isCrossOrigin && isHttps && process.env.NODE_ENV === 'production') {
-      cookieOptions.domain = `.${rootDomain}`;
-    }
+    // 🔥 DEBUG: Log cookie settings
+    this.logger.debug(`Cookie options: ${JSON.stringify({
+      isCrossOrigin,
+      isHttps,
+      frontendDomain,
+      backendDomain,
+      ...cookieOptions
+    })}`);
 
     return cookieOptions;
   }
@@ -303,11 +305,18 @@ export class AuthController {
         throw new BadRequestException('Code is required');
       }
 
+      // 🔥 DEBUG: Check request headers
+      this.logger.log(`Exchange request from: ${req.get('origin')} | User-Agent: ${req.get('user-agent')?.substring(0, 50)}`);
+      this.logger.log(`Request cookies: ${JSON.stringify(req.cookies)}`);
+
       // Exchange code for tokens
       const tokens = await this.authService.exchangeCode(code);
 
       // 🍎 iOS Safari compatible cookie options
       const cookieOptions = this.createCookieOptions(req);
+
+      // 🔥 DEBUG: Log what we're setting
+      this.logger.log(`Setting cookies with options: ${JSON.stringify(cookieOptions)}`);
 
       res.cookie('access_token', tokens.accessToken, {
         ...cookieOptions,
@@ -319,11 +328,14 @@ export class AuthController {
         maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
       });
 
+      this.logger.log(`✅ Cookies set successfully`);
+
       return res.json({
         success: true,
         message: 'Authentication successful',
       });
     } catch (error) {
+      this.logger.error('Exchange error:', error);
       if (error instanceof UnauthorizedException || error instanceof BadRequestException) {
         throw error;
       }
