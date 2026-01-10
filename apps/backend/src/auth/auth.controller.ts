@@ -163,9 +163,15 @@ export class AuthController {
       const isCrossOrigin = frontendDomain !== backendDomain;
       const isHttps = frontendUrl.startsWith('https://') || req.protocol === 'https';
 
+      // Detect iOS Safari - Safari has stricter cookie requirements
+      const userAgent = req.get('user-agent') || '';
+      const isIOSSafari = /iPhone|iPad|iPod/.test(userAgent) && /Safari/.test(userAgent) && !/CriOS|FxiOS|OPiOS/.test(userAgent);
+
       // Determine if we should set domain (only if frontend and backend share a common root domain)
+      // Safari on iOS has issues with domain cookies, so we avoid setting domain when possible
       let cookieDomain: string | undefined = undefined;
-      if (isCrossOrigin) {
+      if (isCrossOrigin && !isIOSSafari) {
+        // Only set domain for non-iOS browsers to avoid Safari issues
         const frontendParts = frontendDomain.split('.');
         const backendParts = backendDomain.split('.');
 
@@ -179,10 +185,10 @@ export class AuthController {
         }
       }
 
-      // Cookie options: 
-      // - For cross-origin with HTTPS: SameSite=None and Secure=true
-      // - For cross-origin without HTTPS: SameSite=Lax and Secure=false (browser limitation)
-      // - For same-origin: SameSite=Lax
+      // Cookie options for iOS Safari:
+      // - Must use SameSite=None with Secure=true for cross-origin
+      // - Should not set domain to avoid Safari restrictions
+      // - Must use HTTPS for Secure cookies
       const cookieOptions: any = {
         httpOnly: true,
         secure: isCrossOrigin && isHttps ? true : (isProduction && isHttps),
@@ -190,8 +196,8 @@ export class AuthController {
         path: '/',
       };
 
-      // Only set domain if we have a valid shared root domain
-      if (cookieDomain) {
+      // Only set domain if not iOS Safari and we have a valid shared root domain
+      if (cookieDomain && !isIOSSafari) {
         cookieOptions.domain = cookieDomain;
       }
 
@@ -249,9 +255,15 @@ export class AuthController {
         role: payload.role,
       });
 
+      // Detect iOS Safari - Safari has stricter cookie requirements
+      const userAgent = req.get('user-agent') || '';
+      const isIOSSafari = /iPhone|iPad|iPod/.test(userAgent) && /Safari/.test(userAgent) && !/CriOS|FxiOS|OPiOS/.test(userAgent);
+
       // Determine cookie domain
+      // Note: Safari on iOS has issues with domain cookies, so we avoid setting domain when possible
       let cookieDomain: string | undefined = undefined;
-      if (isCrossOrigin) {
+      if (isCrossOrigin && !isIOSSafari) {
+        // Only set domain for non-iOS browsers to avoid Safari issues
         const frontendParts = frontendDomain.split('.');
         const backendParts = backendDomain.split('.');
 
@@ -265,6 +277,10 @@ export class AuthController {
         }
       }
 
+      // Cookie options for iOS Safari:
+      // - Must use SameSite=None with Secure=true for cross-origin
+      // - Should not set domain to avoid Safari restrictions
+      // - Must use HTTPS for Secure cookies
       const cookieOptions: any = {
         httpOnly: true,
         secure: isCrossOrigin && isHttps ? true : (isProduction && isHttps),
@@ -272,7 +288,8 @@ export class AuthController {
         path: '/',
       };
 
-      if (cookieDomain) {
+      // Only set domain if not iOS Safari and we have a valid shared root domain
+      if (cookieDomain && !isIOSSafari) {
         cookieOptions.domain = cookieDomain;
       }
 
@@ -332,9 +349,15 @@ export class AuthController {
       const isCrossOrigin = frontendDomain !== backendDomain;
       const isHttps = frontendUrl.startsWith('https://') || req.protocol === 'https';
 
+      // Detect iOS Safari
+      const userAgent = req.get('user-agent') || '';
+      const isIOSSafari = /iPhone|iPad|iPod/.test(userAgent) && /Safari/.test(userAgent) && !/CriOS|FxiOS|OPiOS/.test(userAgent);
+
       // Determine if we should set domain (only if frontend and backend share a common root domain)
+      // Safari on iOS has issues with domain cookies, so we avoid setting domain when possible
       let cookieDomain: string | undefined = undefined;
-      if (isCrossOrigin) {
+      if (isCrossOrigin && !isIOSSafari) {
+        // Only set domain for non-iOS browsers
         const frontendParts = frontendDomain.split('.');
         const backendParts = backendDomain.split('.');
 
@@ -348,10 +371,10 @@ export class AuthController {
         }
       }
 
-      // Cookie options: 
-      // - For cross-origin with HTTPS: SameSite=None and Secure=true
-      // - For cross-origin without HTTPS: SameSite=Lax and Secure=false (browser limitation)
-      // - For same-origin: SameSite=Lax
+      // Cookie options for iOS Safari:
+      // - Must use SameSite=None with Secure=true for cross-origin
+      // - Should not set domain to avoid Safari restrictions
+      // - Must use HTTPS for Secure cookies
       const cookieOptions: any = {
         httpOnly: true,
         secure: isCrossOrigin && isHttps ? true : (isProduction && isHttps),
@@ -359,8 +382,8 @@ export class AuthController {
         path: '/',
       };
 
-      // Only set domain if we have a valid shared root domain
-      if (cookieDomain) {
+      // Only set domain if not iOS Safari and we have a valid shared root domain
+      if (cookieDomain && !isIOSSafari) {
         cookieOptions.domain = cookieDomain;
       }
 
