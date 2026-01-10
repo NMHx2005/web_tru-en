@@ -50,14 +50,24 @@ export class AuthController {
     const isCrossOrigin = frontendDomain !== backendDomain;
     const isHttps = frontendUrl.startsWith('https://') || (req as any).protocol === 'https';
 
-    return {
+    // Extract root domain for production (e.g., "hungyeu.com" from "www.hungyeu.com")
+    const rootDomain = frontendDomain.replace(/^www\./, '');
+
+    // 🍎 iOS Safari REQUIRES domain attribute for SameSite=None cookies
+    const cookieOptions: any = {
       httpOnly: true,
       secure: isHttps,
       sameSite: (isCrossOrigin && isHttps ? 'none' : 'lax') as 'none' | 'lax',
       path: '/',
-      // 🔥 NOTE: Domain attribute removed for now - causes issues in development
-      // Will be added back for production only when needed
     };
+
+    // 🔥 CRITICAL for iOS: Set domain for cross-origin HTTPS cookies
+    // Only set domain in production (HTTPS + cross-origin)
+    if (isCrossOrigin && isHttps && process.env.NODE_ENV === 'production') {
+      cookieOptions.domain = `.${rootDomain}`;
+    }
+
+    return cookieOptions;
   }
 
   @Public()
