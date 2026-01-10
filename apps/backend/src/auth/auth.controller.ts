@@ -13,6 +13,8 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { AuthGuard } from '@nestjs/passport';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -27,7 +29,11 @@ import { ResponseInterceptor } from './interceptors/response.interceptor';
 @Controller('auth')
 @UseInterceptors(ResponseInterceptor)
 export class AuthController {
-  constructor(private authService: AuthService) { }
+  constructor(
+    private authService: AuthService,
+    private jwtService: JwtService,
+    private configService: ConfigService
+  ) { }
 
   @Public()
   @Post('register')
@@ -154,33 +160,37 @@ export class AuthController {
       const frontendDomain = new URL(frontendUrl).hostname;
       const backendUrl = process.env.BACKEND_URL || req.protocol + '://' + req.get('host');
       const backendDomain = new URL(backendUrl).hostname;
+      const isCrossOrigin = frontendDomain !== backendDomain;
+      const isHttps = frontendUrl.startsWith('https://') || req.protocol === 'https';
 
       // Determine if we should set domain (only if frontend and backend share a common root domain)
-      // For example: api.example.com and example.com -> set domain to ".example.com"
       let cookieDomain: string | undefined = undefined;
-      if (isProduction && frontendDomain !== backendDomain) {
-        // Extract root domain (e.g., "example.com" from "api.example.com" or "www.example.com")
+      if (isCrossOrigin) {
         const frontendParts = frontendDomain.split('.');
         const backendParts = backendDomain.split('.');
-        
-        // If both have at least 2 parts and share the same root domain
+
         if (frontendParts.length >= 2 && backendParts.length >= 2) {
           const frontendRoot = frontendParts.slice(-2).join('.');
           const backendRoot = backendParts.slice(-2).join('.');
-          
+
           if (frontendRoot === backendRoot) {
             cookieDomain = `.${frontendRoot}`;
           }
         }
       }
 
+      // Cookie options: 
+      // - For cross-origin with HTTPS: SameSite=None and Secure=true
+      // - For cross-origin without HTTPS: SameSite=Lax and Secure=false (browser limitation)
+      // - For same-origin: SameSite=Lax
       const cookieOptions: any = {
         httpOnly: true,
-        secure: isProduction,
-        sameSite: isProduction ? 'none' : 'lax', // 'none' for cross-origin in production
+        secure: isCrossOrigin && isHttps ? true : (isProduction && isHttps),
+        sameSite: isCrossOrigin && isHttps ? 'none' : 'lax',
         path: '/',
       };
 
+      // Only set domain if we have a valid shared root domain
       if (cookieDomain) {
         cookieOptions.domain = cookieDomain;
       }
@@ -197,7 +207,89 @@ export class AuthController {
         maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
       });
 
-      res.redirect(`${frontendUrl}/auth/callback?token=${tokens.accessToken}`);
+      // Instead of redirecting directly, redirect to a cookie-setting endpoint first
+      // This ensures cookies are set properly before redirecting to frontend
+      res.redirect(`${backendUrl}/api/auth/set-cookie?token=${tokens.accessToken}&redirect=${encodeURIComponent(`${frontendUrl}/auth/callback?token=${tokens.accessToken}`)}`);
+    } catch {
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      res.redirect(`${frontendUrl}/login?error=oauth_failed`);
+    }
+  }
+
+  @Public()
+  @Get('set-cookie')
+  async setCookie(@Req() req: Request, @Res() res: Response) {
+    try {
+      const token = req.query.token as string;
+      const redirectUrl = req.query.redirect as string;
+
+      if (!token) {
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        return res.redirect(`${frontendUrl}/login?error=invalid_token`);
+      }
+
+      // Verify token and get payload
+      const payload = this.jwtService.verify(token, {
+        secret: this.configService.get<string>('JWT_SECRET'),
+      });
+
+      const isProduction = process.env.NODE_ENV === 'production';
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      const frontendDomain = new URL(frontendUrl).hostname;
+      const backendUrl = process.env.BACKEND_URL || req.protocol + '://' + req.get('host');
+      const backendDomain = new URL(backendUrl).hostname;
+      const isCrossOrigin = frontendDomain !== backendDomain;
+      const isHttps = frontendUrl.startsWith('https://') || req.protocol === 'https';
+
+      // Generate new tokens from payload (to ensure refresh token is also set)
+      const tokens = await this.authService.generateTokens({
+        id: payload.sub,
+        email: payload.email,
+        username: payload.username,
+        role: payload.role,
+      });
+
+      // Determine cookie domain
+      let cookieDomain: string | undefined = undefined;
+      if (isCrossOrigin) {
+        const frontendParts = frontendDomain.split('.');
+        const backendParts = backendDomain.split('.');
+
+        if (frontendParts.length >= 2 && backendParts.length >= 2) {
+          const frontendRoot = frontendParts.slice(-2).join('.');
+          const backendRoot = backendParts.slice(-2).join('.');
+
+          if (frontendRoot === backendRoot) {
+            cookieDomain = `.${frontendRoot}`;
+          }
+        }
+      }
+
+      const cookieOptions: any = {
+        httpOnly: true,
+        secure: isCrossOrigin && isHttps ? true : (isProduction && isHttps),
+        sameSite: isCrossOrigin && isHttps ? 'none' : 'lax',
+        path: '/',
+      };
+
+      if (cookieDomain) {
+        cookieOptions.domain = cookieDomain;
+      }
+
+      // Set cookies
+      res.cookie('access_token', tokens.accessToken, {
+        ...cookieOptions,
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+
+      res.cookie('refresh_token', tokens.refreshToken, {
+        ...cookieOptions,
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+      });
+
+      // Redirect to frontend
+      const finalRedirect = redirectUrl || `${frontendUrl}/auth/callback?token=${tokens.accessToken}`;
+      res.redirect(finalRedirect);
     } catch {
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
       res.redirect(`${frontendUrl}/login?error=oauth_failed`);
@@ -237,30 +329,37 @@ export class AuthController {
       const frontendDomain = new URL(frontendUrl).hostname;
       const backendUrl = process.env.BACKEND_URL || req.protocol + '://' + req.get('host');
       const backendDomain = new URL(backendUrl).hostname;
+      const isCrossOrigin = frontendDomain !== backendDomain;
+      const isHttps = frontendUrl.startsWith('https://') || req.protocol === 'https';
 
       // Determine if we should set domain (only if frontend and backend share a common root domain)
       let cookieDomain: string | undefined = undefined;
-      if (isProduction && frontendDomain !== backendDomain) {
+      if (isCrossOrigin) {
         const frontendParts = frontendDomain.split('.');
         const backendParts = backendDomain.split('.');
-        
+
         if (frontendParts.length >= 2 && backendParts.length >= 2) {
           const frontendRoot = frontendParts.slice(-2).join('.');
           const backendRoot = backendParts.slice(-2).join('.');
-          
+
           if (frontendRoot === backendRoot) {
             cookieDomain = `.${frontendRoot}`;
           }
         }
       }
 
+      // Cookie options: 
+      // - For cross-origin with HTTPS: SameSite=None and Secure=true
+      // - For cross-origin without HTTPS: SameSite=Lax and Secure=false (browser limitation)
+      // - For same-origin: SameSite=Lax
       const cookieOptions: any = {
         httpOnly: true,
-        secure: isProduction,
-        sameSite: isProduction ? 'none' : 'lax',
+        secure: isCrossOrigin && isHttps ? true : (isProduction && isHttps),
+        sameSite: isCrossOrigin && isHttps ? 'none' : 'lax',
         path: '/',
       };
 
+      // Only set domain if we have a valid shared root domain
       if (cookieDomain) {
         cookieOptions.domain = cookieDomain;
       }
