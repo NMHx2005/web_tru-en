@@ -47,12 +47,10 @@ export const useAuth = () => {
           try {
             await authService.getMe();
             success = true;
-          } catch (err: any) {
+          } catch {
             retries++;
             if (retries < maxRetries) {
               await new Promise(resolve => setTimeout(resolve, 500));
-            } else {
-              console.warn('Failed to verify auth after register, but continuing...', err);
             }
           }
         }
@@ -65,8 +63,7 @@ export const useAuth = () => {
 
         // Use replace instead of push to avoid adding to history
         router.replace('/');
-      } catch (error) {
-        console.error('Error during register success handler:', error);
+      } catch {
         router.replace('/');
       }
     },
@@ -102,9 +99,6 @@ export const useAuth = () => {
               // Đợi thêm một chút rồi thử lại (tăng delay cho mỗi lần retry trên mobile)
               await new Promise(resolve => setTimeout(resolve, 800 + (retries * 200)));
             } else {
-              // Nếu vẫn thất bại sau nhiều lần thử, vẫn tiếp tục để tránh block user
-              console.warn('Failed to verify auth after login, but continuing...', err);
-              // Vẫn invalidate để trang chủ sẽ refetch lại
               queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
             }
           }
@@ -123,10 +117,7 @@ export const useAuth = () => {
 
         // Use replace instead of push to avoid adding to history
         router.replace('/');
-      } catch (error) {
-        console.error('Error during login success handler:', error);
-        // Even if refetch fails, still redirect (user might be logged in but query failed)
-        // Invalidate để trang chủ sẽ refetch lại
+      } catch {
         queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
         router.replace('/');
       }

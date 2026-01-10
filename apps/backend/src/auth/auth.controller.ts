@@ -138,7 +138,6 @@ export class AuthController {
     try {
       const user = req.user as any;
       if (!user || !user.id || !user.email || !user.username || !user.role) {
-        console.error('[Google OAuth] Authentication failed: Missing user data', { user });
         throw new UnauthorizedException('Authentication failed');
       }
 
@@ -153,27 +152,53 @@ export class AuthController {
       const isProduction = process.env.NODE_ENV === 'production';
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
       const frontendDomain = new URL(frontendUrl).hostname;
+      const backendUrl = process.env.BACKEND_URL || req.protocol + '://' + req.get('host');
+      const backendDomain = new URL(backendUrl).hostname;
 
+      // Determine if we should set domain (only if frontend and backend share a common root domain)
+      // For example: api.example.com and example.com -> set domain to ".example.com"
+      let cookieDomain: string | undefined = undefined;
+      if (isProduction && frontendDomain !== backendDomain) {
+        // Extract root domain (e.g., "example.com" from "api.example.com" or "www.example.com")
+        const frontendParts = frontendDomain.split('.');
+        const backendParts = backendDomain.split('.');
+        
+        // If both have at least 2 parts and share the same root domain
+        if (frontendParts.length >= 2 && backendParts.length >= 2) {
+          const frontendRoot = frontendParts.slice(-2).join('.');
+          const backendRoot = backendParts.slice(-2).join('.');
+          
+          if (frontendRoot === backendRoot) {
+            cookieDomain = `.${frontendRoot}`;
+          }
+        }
+      }
+
+      const cookieOptions: any = {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: isProduction ? 'none' : 'lax', // 'none' for cross-origin in production
+        path: '/',
+      };
+
+      if (cookieDomain) {
+        cookieOptions.domain = cookieDomain;
+      }
+
+      // Set access token cookie
       res.cookie('access_token', tokens.accessToken, {
-        httpOnly: true,
-        secure: isProduction,
-        sameSite: isProduction ? 'none' : 'lax', // 'none' for cross-origin in production
+        ...cookieOptions,
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-        path: '/',
-        // Don't set domain for cross-origin cookies - let browser handle it
       });
+
+      // Set refresh token cookie
       res.cookie('refresh_token', tokens.refreshToken, {
-        httpOnly: true,
-        secure: isProduction,
-        sameSite: isProduction ? 'none' : 'lax', // 'none' for cross-origin in production
+        ...cookieOptions,
         maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-        path: '/',
-        // Don't set domain for cross-origin cookies - let browser handle it
       });
 
       res.redirect(`${frontendUrl}/auth/callback?token=${tokens.accessToken}`);
-    } catch (error) {
-      console.error('[Google OAuth] Callback error:', error);
+    } catch {
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
       res.redirect(`${frontendUrl}/login?error=oauth_failed`);
     }
@@ -193,7 +218,6 @@ export class AuthController {
     try {
       const user = req.user as any;
       if (!user || !user.id || !user.email || !user.username || !user.role) {
-        console.error('[Facebook OAuth] Authentication failed: Missing user data', { user });
         throw new UnauthorizedException('Authentication failed');
       }
 
@@ -210,22 +234,47 @@ export class AuthController {
       // Set cookies manually (don't use CookieInterceptor for redirects)
       const isProduction = process.env.NODE_ENV === 'production';
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      const frontendDomain = new URL(frontendUrl).hostname;
+      const backendUrl = process.env.BACKEND_URL || req.protocol + '://' + req.get('host');
+      const backendDomain = new URL(backendUrl).hostname;
 
+      // Determine if we should set domain (only if frontend and backend share a common root domain)
+      let cookieDomain: string | undefined = undefined;
+      if (isProduction && frontendDomain !== backendDomain) {
+        const frontendParts = frontendDomain.split('.');
+        const backendParts = backendDomain.split('.');
+        
+        if (frontendParts.length >= 2 && backendParts.length >= 2) {
+          const frontendRoot = frontendParts.slice(-2).join('.');
+          const backendRoot = backendParts.slice(-2).join('.');
+          
+          if (frontendRoot === backendRoot) {
+            cookieDomain = `.${frontendRoot}`;
+          }
+        }
+      }
+
+      const cookieOptions: any = {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: isProduction ? 'none' : 'lax',
+        path: '/',
+      };
+
+      if (cookieDomain) {
+        cookieOptions.domain = cookieDomain;
+      }
+
+      // Set access token cookie
       res.cookie('access_token', tokens.accessToken, {
-        httpOnly: true,
-        secure: isProduction,
-        sameSite: isProduction ? 'none' : 'lax', // 'none' for cross-origin in production
+        ...cookieOptions,
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-        path: '/',
-        // Don't set domain for cross-origin cookies - let browser handle it
       });
+
+      // Set refresh token cookie
       res.cookie('refresh_token', tokens.refreshToken, {
-        httpOnly: true,
-        secure: isProduction,
-        sameSite: isProduction ? 'none' : 'lax', // 'none' for cross-origin in production
+        ...cookieOptions,
         maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-        path: '/',
-        // Don't set domain for cross-origin cookies - let browser handle it
       });
 
       // If user needs email, redirect to email collection page
@@ -234,8 +283,7 @@ export class AuthController {
       } else {
         res.redirect(`${frontendUrl}/auth/callback?token=${tokens.accessToken}`);
       }
-    } catch (error) {
-      console.error('[Facebook OAuth] Callback error:', error);
+    } catch {
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
       res.redirect(`${frontendUrl}/login?error=oauth_failed`);
     }
