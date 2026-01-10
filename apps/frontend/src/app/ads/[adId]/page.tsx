@@ -116,14 +116,14 @@ export default function AdPage() {
                 <Header />
                 <main className="pt-4 md:pt-8 pb-12 min-h-[calc(100vh-60px)]">
                     <div className="max-w-4xl mx-auto px-4 md:px-6">
-                        {/* Story Header (if available) */}
-                        {storySlug && (
+                        {/* Back Button - Return to chapter page */}
+                        {(returnUrl || storySlug) && (
                             <div className="mb-6">
                                 <Link
-                                    href={`/truyen/${storySlug}`}
+                                    href={returnUrl || (storySlug ? `/truyen/${storySlug}` : '/')}
                                     className="text-blue-500 hover:text-blue-600 dark:text-blue-400 mb-2 inline-block text-left"
                                 >
-                                    ← Quay lại truyện
+                                    ← Quay lại
                                 </Link>
                             </div>
                         )}

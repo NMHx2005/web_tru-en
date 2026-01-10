@@ -37,11 +37,12 @@ export default function BookDetailPage() {
       ? (chaptersResponse as any).data
       : []);
 
-  // Check if we came from author edit context
+  // Get back URL - always go to parent page (home page)
+  // Except if coming from author edit context
   const getBackUrl = () => {
     if (typeof window !== 'undefined') {
       const referrer = document.referrer;
-      // If coming from edit chapter page, go back to chapter management
+      // If coming from author edit context, go back to chapter management
       if (referrer.includes('/author/stories/') && referrer.includes('/chapters/') && referrer.includes('/edit')) {
         // Extract story slug from referrer
         const match = referrer.match(/\/author\/stories\/([^/]+)\/chapters/);
@@ -54,16 +55,13 @@ export default function BookDetailPage() {
         return referrer;
       }
     }
-    return null;
+    // Always return to home page (parent page)
+    return '/';
   };
 
   const handleBack = () => {
     const backUrl = getBackUrl();
-    if (backUrl) {
-      router.push(backUrl);
-    } else {
-      router.back();
-    }
+    router.push(backUrl);
   };
 
   const { showToast } = useToast();

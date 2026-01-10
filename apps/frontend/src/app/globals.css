@@ -56,6 +56,115 @@ body {
   transition: background-color 300ms ease, color 300ms ease;
 }
 
+/* Global Custom Scrollbar for entire website */
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+}
+
+/* WebKit browsers (Chrome, Safari, Edge) */
+*::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+}
+
+*::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 0;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.4);
+  border-radius: 7px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  transition: background 0.2s ease;
+  min-height: 20px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.6);
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-button {
+  display: block;
+  height: 14px;
+  width: 14px;
+  background: rgba(148, 163, 184, 0.15);
+  border: none;
+}
+
+*::-webkit-scrollbar-button:single-button:vertical:decrement {
+  border-width: 0 4px 4px 4px;
+  border-color: transparent transparent rgba(148, 163, 184, 0.7) transparent;
+  border-style: solid;
+  background: rgba(148, 163, 184, 0.1);
+}
+
+*::-webkit-scrollbar-button:single-button:vertical:decrement:hover {
+  border-color: transparent transparent rgba(148, 163, 184, 0.9) transparent;
+  background: rgba(148, 163, 184, 0.2);
+}
+
+*::-webkit-scrollbar-button:single-button:vertical:increment {
+  border-width: 4px 4px 0 4px;
+  border-color: rgba(148, 163, 184, 0.7) transparent transparent transparent;
+  border-style: solid;
+  background: rgba(148, 163, 184, 0.1);
+}
+
+*::-webkit-scrollbar-button:single-button:vertical:increment:hover {
+  border-color: rgba(148, 163, 184, 0.9) transparent transparent transparent;
+  background: rgba(148, 163, 184, 0.2);
+}
+
+/* Dark mode scrollbar - Modern IDE style */
+.dark * {
+  scrollbar-color: rgba(148, 163, 184, 0.5) rgba(30, 41, 59, 0.4);
+}
+
+.dark *::-webkit-scrollbar-track {
+  background: rgba(30, 41, 59, 0.4);
+}
+
+.dark *::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.5);
+  border: 3px solid rgba(30, 41, 59, 0.4);
+  background-clip: padding-box;
+  border-radius: 7px;
+}
+
+.dark *::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.7);
+  background-clip: padding-box;
+}
+
+.dark *::-webkit-scrollbar-button {
+  background: rgba(30, 41, 59, 0.4);
+}
+
+.dark *::-webkit-scrollbar-button:single-button:vertical:decrement {
+  border-color: transparent transparent rgba(148, 163, 184, 0.7) transparent;
+  background: rgba(30, 41, 59, 0.4);
+}
+
+.dark *::-webkit-scrollbar-button:single-button:vertical:decrement:hover {
+  border-color: transparent transparent rgba(148, 163, 184, 0.9) transparent;
+  background: rgba(30, 41, 59, 0.6);
+}
+
+.dark *::-webkit-scrollbar-button:single-button:vertical:increment {
+  border-color: rgba(148, 163, 184, 0.7) transparent transparent transparent;
+  background: rgba(30, 41, 59, 0.4);
+}
+
+.dark *::-webkit-scrollbar-button:single-button:vertical:increment:hover {
+  border-color: rgba(148, 163, 184, 0.9) transparent transparent transparent;
+  background: rgba(30, 41, 59, 0.6);
+}
+
 /* Scrollbar hide utility */
 .scrollbar-hide {
   -ms-overflow-style: none;
@@ -199,4 +308,43 @@ body {
   .animate-slide-in-right {
     animation: slideInRight 0.3s ease-out;
   }
+}
+
+/* Custom scrollbar for chapter list */
+.chapter-list-scrollbar {
+  /* Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
+}
+
+.chapter-list-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chapter-list-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 10px;
+}
+
+.chapter-list-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.4);
+  border-radius: 10px;
+  transition: background 0.2s ease;
+}
+
+.chapter-list-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.6);
+}
+
+/* Dark mode scrollbar */
+.dark .chapter-list-scrollbar {
+  scrollbar-color: rgba(100, 116, 139, 0.5) transparent;
+}
+
+.dark .chapter-list-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.5);
+}
+
+.dark .chapter-list-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.7);
 }

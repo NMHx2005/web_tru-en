@@ -23,10 +23,10 @@ export const useAuth = () => {
       }
     },
     retry: false,
-    retryOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    retryOnMount: true, // Retry on mount to refetch after login redirect
+    refetchOnWindowFocus: true, // Refetch on window focus to keep user data fresh
+    refetchOnReconnect: true, // Refetch on reconnect
+    staleTime: 0, // Set to 0 to always refetch on mount after invalidate (important for mobile after login)
     gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
   });
 
@@ -34,10 +34,41 @@ export const useAuth = () => {
   const registerMutation = useMutation({
     mutationFn: (data: RegisterRequest) => authService.register(data),
     onSuccess: async () => {
-      // Refetch user data and wait for it to complete before redirecting
-      await queryClient.refetchQueries({ queryKey: ['auth', 'me'] });
-      // Use replace instead of push to avoid adding to history
-      router.replace('/');
+      try {
+        // Đợi một chút để đảm bảo cookie được set (đặc biệt trên mobile)
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        // Thử gọi getMe trực tiếp để đảm bảo cookie đã được set
+        let retries = 0;
+        const maxRetries = 3;
+        let success = false;
+
+        while (retries < maxRetries && !success) {
+          try {
+            await authService.getMe();
+            success = true;
+          } catch (err: any) {
+            retries++;
+            if (retries < maxRetries) {
+              await new Promise(resolve => setTimeout(resolve, 500));
+            } else {
+              console.warn('Failed to verify auth after register, but continuing...', err);
+            }
+          }
+        }
+
+        // Refetch user data và đợi cho nó hoàn thành
+        await queryClient.refetchQueries({ queryKey: ['auth', 'me'] });
+
+        // Đợi thêm một chút để đảm bảo state được cập nhật trước khi redirect
+        await new Promise(resolve => setTimeout(resolve, 200));
+
+        // Use replace instead of push to avoid adding to history
+        router.replace('/');
+      } catch (error) {
+        console.error('Error during register success handler:', error);
+        router.replace('/');
+      }
     },
   });
 
@@ -45,10 +76,60 @@ export const useAuth = () => {
   const loginMutation = useMutation({
     mutationFn: (data: LoginRequest) => authService.login(data),
     onSuccess: async () => {
-      // Refetch user data and wait for it to complete before redirecting
-      await queryClient.refetchQueries({ queryKey: ['auth', 'me'] });
-      // Use replace instead of push to avoid adding to history
-      router.replace('/');
+      try {
+        // Đợi một chút để đảm bảo cookie được set (đặc biệt trên mobile - có thể cần thời gian lâu hơn)
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        // Thử gọi getMe trực tiếp để đảm bảo cookie đã được set và xác thực thành công
+        // Retry logic để handle trường hợp cookie chưa kịp set trên mobile
+        let retries = 0;
+        const maxRetries = 5; // Tăng số lần retry cho mobile
+        let success = false;
+        let userData = null;
+
+        while (retries < maxRetries && !success) {
+          try {
+            const response = await authService.getMe();
+            if (response?.data?.user) {
+              success = true;
+              userData = response.data.user;
+              // Set user data vào cache ngay lập tức để components có thể sử dụng
+              queryClient.setQueryData(['auth', 'me'], userData);
+            }
+          } catch (err: any) {
+            retries++;
+            if (retries < maxRetries) {
+              // Đợi thêm một chút rồi thử lại (tăng delay cho mỗi lần retry trên mobile)
+              await new Promise(resolve => setTimeout(resolve, 800 + (retries * 200)));
+            } else {
+              // Nếu vẫn thất bại sau nhiều lần thử, vẫn tiếp tục để tránh block user
+              console.warn('Failed to verify auth after login, but continuing...', err);
+              // Vẫn invalidate để trang chủ sẽ refetch lại
+              queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
+            }
+          }
+        }
+
+        // Nếu đã xác thực thành công, invalidate và refetch queries để đảm bảo tất cả components được cập nhật
+        if (success) {
+          // Invalidate để đánh dấu query là stale, đảm bảo refetch khi component mount
+          queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
+          // Refetch để đảm bảo data được sync
+          await queryClient.refetchQueries({ queryKey: ['auth', 'me'] });
+        }
+
+        // Đợi thêm một chút để đảm bảo state được cập nhật và cache được sync
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        // Use replace instead of push to avoid adding to history
+        router.replace('/');
+      } catch (error) {
+        console.error('Error during login success handler:', error);
+        // Even if refetch fails, still redirect (user might be logged in but query failed)
+        // Invalidate để trang chủ sẽ refetch lại
+        queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
+        router.replace('/');
+      }
     },
   });
 

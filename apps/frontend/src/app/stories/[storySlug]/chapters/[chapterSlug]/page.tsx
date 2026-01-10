@@ -26,7 +26,7 @@ import {
     getVisitCount
 } from '@/utils/reading-tracker';
 import { useSaveProgress, useChapterProgress } from '@/lib/api/hooks/use-reading-history';
-import { BookOpen } from 'lucide-react';
+import { BookOpen, Search } from 'lucide-react';
 
 export default function ChapterReadingPage() {
     const params = useParams();
@@ -49,6 +49,7 @@ export default function ChapterReadingPage() {
         }
         return false;
     });
+    const [chapterSearchTerm, setChapterSearchTerm] = useState('');
     const [isChapterCompleted, setIsChapterCompleted] = useState(false);
     const contentRef = useRef<HTMLDivElement>(null);
     const hasTrackedCompletion = useRef<string | null>(null); // Track which chapterId has been tracked
@@ -154,6 +155,19 @@ export default function ChapterReadingPage() {
 
         return { prevChapter: prev, nextChapter: next };
     }, [currentChapterIndex, sortedChapters]);
+
+    // Filter chapters based on search term
+    const filteredChapters = useMemo(() => {
+        if (!chapterSearchTerm.trim()) {
+            return sortedChapters;
+        }
+        const searchLower = chapterSearchTerm.toLowerCase().trim();
+        return sortedChapters.filter((ch: any) => {
+            const title = (ch.title || `Chương ${ch.order || ''}`).toLowerCase();
+            const order = ch.order?.toString() || '';
+            return title.includes(searchLower) || order.includes(searchLower);
+        });
+    }, [sortedChapters, chapterSearchTerm]);
 
     // Mark chapter as visited when page loads and check for ad redirect
     useEffect(() => {
@@ -306,14 +320,20 @@ export default function ChapterReadingPage() {
             // Set flag to prevent saving during restore
             isRestoringScrollRef.current = true;
 
-            // Calculate scroll position based on progress
-            const scrollContainer = contentRef.current;
-            const maxScroll = scrollContainer.scrollHeight - scrollContainer.clientHeight;
-            const targetScroll = (progress / 100) * maxScroll;
+            // Calculate scroll position based on progress using window scroll
+            const contentElement = contentRef.current;
+            const contentTop = contentElement.offsetTop;
+            const contentHeight = contentElement.scrollHeight;
+            const viewportHeight = window.innerHeight;
+            // Calculate target scroll position based on progress
+            // progress = (viewportBottom - contentTop) / contentHeight * 100
+            // => viewportBottom = contentTop + (progress / 100) * contentHeight
+            // => scrollTop = viewportBottom - viewportHeight = contentTop + (progress / 100) * contentHeight - viewportHeight
+            const targetScroll = Math.max(0, contentTop + (progress / 100) * contentHeight - viewportHeight);
 
             // Smooth scroll to saved position
             setTimeout(() => {
-                scrollContainer.scrollTo({
+                window.scrollTo({
                     top: targetScroll,
                     behavior: 'smooth'
                 });
@@ -330,23 +350,60 @@ export default function ChapterReadingPage() {
     useEffect(() => {
         if (!contentRef.current || !user || !chapterId) return;
 
-        const scrollContainer = contentRef.current;
+        const contentElement = contentRef.current;
 
         const handleScroll = () => {
-            if (!scrollContainer || !chapterId) return;
+            if (!contentElement || !chapterId) return;
 
             // Skip saving if we're restoring scroll position
             if (isRestoringScrollRef.current) return;
 
-            const scrollTop = scrollContainer.scrollTop;
-            const scrollHeight = scrollContainer.scrollHeight;
-            const clientHeight = scrollContainer.clientHeight;
+            // Calculate progress based on window scroll position relative to content element
+            const contentTop = contentElement.offsetTop;
+            const contentHeight = contentElement.scrollHeight;
+            const viewportHeight = window.innerHeight;
+            const scrollTop = window.scrollY;
+            const viewportBottom = scrollTop + viewportHeight;
+
+            const contentStart = contentTop;
+            const contentEnd = contentTop + contentHeight;
+
+            // If viewport hasn't reached content yet, progress is 0
+            if (viewportBottom < contentStart) {
+                return;
+            }
+
+            // If viewport has passed content, progress is 100
+            if (scrollTop >= contentEnd) {
+                const progress = 100;
+                const progressDiff = Math.abs(progress - lastSavedProgressRef.current);
+                if (progressDiff >= 1) {
+                    if (saveProgressTimeoutRef.current) {
+                        clearTimeout(saveProgressTimeoutRef.current);
+                    }
+                    saveProgressTimeoutRef.current = setTimeout(() => {
+                        if (user && chapterId) {
+                            saveProgress.mutate(
+                                { chapterId, progress },
+                                {
+                                    onSuccess: () => {
+                                        lastSavedProgressRef.current = progress;
+                                    },
+                                    onError: (error) => {
+                                        console.error('Failed to save reading progress:', error);
+                                    }
+                                }
+                            );
+                        }
+                    }, 1000);
+                }
+                return;
+            }
 
             // Calculate progress percentage (0-100)
-            const maxScroll = scrollHeight - clientHeight;
-            if (maxScroll <= 0) return;
-
-            const progress = Math.min(100, Math.max(0, Math.round((scrollTop / maxScroll) * 100)));
+            // Progress = how much of content has been scrolled through viewport
+            const scrolledThrough = Math.max(0, viewportBottom - contentStart);
+            const progress = Math.min(100, Math.max(0, Math.round((scrolledThrough / contentHeight) * 100)));
 
             // Update scroll progress in tracker
             const chapterTrackerId = `${storySlug}-${chapterSlug}`;
@@ -386,22 +443,24 @@ export default function ChapterReadingPage() {
             }
         };
 
-        scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
+        window.addEventListener('scroll', handleScroll, { passive: true });
 
         // Also save immediately when progress reaches 100%
         const checkAndSaveComplete = () => {
-            if (!scrollContainer || !user || !chapterId) return;
+            if (!contentElement || !user || !chapterId) return;
 
             // Skip saving if we're restoring scroll position
             if (isRestoringScrollRef.current) return;
 
-            const scrollTop = scrollContainer.scrollTop;
-            const scrollHeight = scrollContainer.scrollHeight;
-            const clientHeight = scrollContainer.clientHeight;
-            const maxScroll = scrollHeight - clientHeight;
+            const contentTop = contentElement.offsetTop;
+            const contentHeight = contentElement.scrollHeight;
+            const viewportHeight = window.innerHeight;
+            const scrollTop = window.scrollY;
+            const viewportBottom = scrollTop + viewportHeight;
 
-            if (maxScroll > 0) {
-                const progress = Math.min(100, Math.max(0, Math.round((scrollTop / maxScroll) * 100)));
+            if (viewportBottom >= contentTop) {
+                const scrolledThrough = Math.max(0, viewportBottom - contentTop);
+                const progress = Math.min(100, Math.max(0, Math.round((scrolledThrough / contentHeight) * 100)));
 
                 // Save immediately if reached 100% or very close (>= 90%)
                 if (progress >= 90 && lastSavedProgressRef.current < 90) {
@@ -438,11 +497,11 @@ export default function ChapterReadingPage() {
                 checkAndSaveComplete();
             }, 500);
         };
-        scrollContainer.addEventListener('scroll', handleScrollEnd, { passive: true });
+        window.addEventListener('scroll', handleScrollEnd, { passive: true });
 
         return () => {
-            scrollContainer.removeEventListener('scroll', handleScroll);
-            scrollContainer.removeEventListener('scroll', handleScrollEnd);
+            window.removeEventListener('scroll', handleScroll);
+            window.removeEventListener('scroll', handleScrollEnd);
             if (saveProgressTimeoutRef.current) {
                 clearTimeout(saveProgressTimeoutRef.current);
             }
@@ -452,11 +511,12 @@ export default function ChapterReadingPage() {
         };
     }, [user, chapterId, saveProgress, storySlug, chapterSlug]); // Removed chapterData, added storySlug and chapterSlug
 
-    // Check if we came from author edit context
+    // Get back URL - always go to parent page (story detail page)
+    // Except if coming from author edit context
     const getBackUrl = () => {
         if (typeof window !== 'undefined') {
             const referrer = document.referrer;
-            // If coming from edit chapter page, go back to chapter management
+            // If coming from author edit context, go back to chapter management
             if (referrer.includes('/author/stories/') && referrer.includes('/chapters/') && referrer.includes('/edit')) {
                 // Extract story slug from referrer
                 const match = referrer.match(/\/author\/stories\/([^/]+)\/chapters/);
@@ -469,6 +529,7 @@ export default function ChapterReadingPage() {
                 return referrer;
             }
         }
+        // Always return to story detail page (parent page)
         return `/truyen/${storySlug}`;
     };
 
@@ -644,39 +705,68 @@ export default function ChapterReadingPage() {
                         {/* Chapter List Sidebar */}
                         {showChapterList && (
                             <div className="hidden md:block w-64 flex-shrink-0">
-                                <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm sticky top-4 max-h-[calc(100vh-200px)] overflow-y-auto">
+                                <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm sticky top-4 max-h-[calc(100vh-200px)] overflow-y-auto chapter-list-scrollbar">
                                     <h3 className="font-bold text-gray-900 dark:text-white mb-3">
                                         Danh sách chương
                                     </h3>
-                                    <div className="space-y-1">
-                                        {sortedChapters?.map((ch: any, index: number) => {
-                                            // Normalize slugs for comparison (handle URL encoding)
-                                            const normalizeSlug = (slug: string) => {
-                                                try {
-                                                    return decodeURIComponent(slug).toLowerCase().trim();
-                                                } catch {
-                                                    return slug.toLowerCase().trim();
-                                                }
-                                            };
 
-                                            const normalizedChapterSlug = normalizeSlug(chapterSlug);
-                                            const normalizedChSlug = ch.slug ? normalizeSlug(ch.slug) : '';
-                                            const isActive = normalizedChSlug === normalizedChapterSlug;
-
-                                            return (
-                                                <Link
-                                                    key={ch.id}
-                                                    href={`/stories/${storySlug}/chapters/${ch.slug}`}
-                                                    className={`block px-3 py-2 rounded text-sm transition-colors ${isActive
-                                                        ? 'bg-blue-500 dark:bg-blue-600 text-white font-semibold shadow-sm'
-                                                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                                                        }`}
-                                                >
-                                                    {ch.title || `Chương ${ch.order || (index + 1)}`}
-                                                </Link>
-                                            );
-                                        })}
+                                    {/* Search Input */}
+                                    <div className="relative mb-3">
+                                        <Search
+                                            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
+                                            size={16}
+                                        />
+                                        <input
+                                            type="text"
+                                            placeholder="Tìm kiếm chương..."
+                                            value={chapterSearchTerm}
+                                            onChange={(e) => setChapterSearchTerm(e.target.value)}
+                                            className="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        />
                                     </div>
+
+                                    <div className="space-y-1">
+                                        {filteredChapters.length > 0 ? (
+                                            filteredChapters.map((ch: any, index: number) => {
+                                                // Normalize slugs for comparison (handle URL encoding)
+                                                const normalizeSlug = (slug: string) => {
+                                                    try {
+                                                        return decodeURIComponent(slug).toLowerCase().trim();
+                                                    } catch {
+                                                        return slug.toLowerCase().trim();
+                                                    }
+                                                };
+
+                                                const normalizedChapterSlug = normalizeSlug(chapterSlug);
+                                                const normalizedChSlug = ch.slug ? normalizeSlug(ch.slug) : '';
+                                                const isActive = normalizedChSlug === normalizedChapterSlug;
+
+                                                return (
+                                                    <Link
+                                                        key={ch.id}
+                                                        href={`/stories/${storySlug}/chapters/${ch.slug}`}
+                                                        className={`block px-3 py-2 rounded text-sm transition-colors ${isActive
+                                                            ? 'bg-blue-500 dark:bg-blue-600 text-white font-semibold shadow-sm'
+                                                            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                                            }`}
+                                                    >
+                                                        {ch.title || `Chương ${ch.order || (index + 1)}`}
+                                                    </Link>
+                                                );
+                                            })
+                                        ) : (
+                                            <div className="px-3 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                                                Không tìm thấy chương nào
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Show count if searching */}
+                                    {chapterSearchTerm.trim() && (
+                                        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400 text-center">
+                                            Tìm thấy {filteredChapters.length} / {sortedChapters.length} chương
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -685,7 +775,7 @@ export default function ChapterReadingPage() {
                         <div className="flex-1">
                             <div
                                 ref={contentRef}
-                                className="bg-white dark:bg-gray-800 rounded-lg p-6 md:p-8 lg:p-12 shadow-sm max-h-[calc(100vh-300px)] overflow-y-auto"
+                                className="bg-white dark:bg-gray-800 rounded-lg p-6 md:p-8 lg:p-12 shadow-sm"
                                 style={{ fontSize: `${fontSize}px`, lineHeight: '2' }}
                             >
                                 <div
