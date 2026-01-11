@@ -40,9 +40,13 @@ model User {
   approvalRequests        ApprovalRequest[]        @relation("ApprovalRequests")
   reviewedApprovals       ApprovalRequest[]        @relation("ReviewedApprovals")
   createdAds              Ad[]                     @relation("AdCreator")
+  createdCampaigns        Campaign[]               @relation("CampaignCreator")
+  adImpressions           AdImpression[]           @relation("AdImpressionUser")
+  adClicks                AdClick[]                @relation("AdClickUser")
   oauthCodes              OAuthCode[]
   emailVerificationTokens EmailVerificationToken[]
   refreshTokens           RefreshToken[]
+  createdNotifications    Notification[]           @relation("NotificationCreator")
 
   @@index([email])
   @@index([username])
@@ -400,32 +404,119 @@ enum ApprovalStatus {
   REJECTED
 }
 
+enum NotificationType {
+  SYSTEM_UPDATE // Cập nhật hệ thống
+  MAINTENANCE // Bảo trì
+  NEW_FEATURE // Tính năng mới
+  ANNOUNCEMENT // Thông báo chung
+  WARNING // Cảnh báo
+  INFO // Thông tin
+}
+
+enum NotificationPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+model Campaign {
+  id          String   @id @default(cuid())
+  name        String
+  description String?  @db.Text
+  budget      Float?
+  spent       Float    @default(0)
+  startDate   DateTime
+  endDate     DateTime
+  isActive    Boolean  @default(true)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  ads         Ad[]
+  createdBy   User?    @relation("CampaignCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([isActive])
+  @@index([startDate])
+  @@index([endDate])
+  @@index([createdById])
+  @@map("campaigns")
+}
+
 model Ad {
-  id            String     @id @default(cuid())
-  title         String?
-  description   String?    @db.Text
-  imageUrl      String
-  linkUrl       String?
-  type          AdType     @default(BANNER)
-  position      AdPosition @default(BOTTOM)
-  isActive      Boolean    @default(true)
-  startDate     DateTime?
-  endDate       DateTime?
-  clickCount    Int        @default(0)
-  viewCount     Int        @default(0)
-  popupInterval Int? // Number of chapters to read before showing popup (only for POPUP type)
-  createdById   String?
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
-  createdBy     User?      @relation("AdCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  id             String         @id @default(cuid())
+  title          String?
+  description    String?        @db.Text
+  imageUrl       String
+  linkUrl        String?
+  type           AdType         @default(BANNER)
+  position       AdPosition     @default(BOTTOM)
+  isActive       Boolean        @default(true)
+  startDate      DateTime?
+  endDate        DateTime?
+  clickCount     Int            @default(0)
+  viewCount      Int            @default(0)
+  impressions    Int            @default(0) // Total impressions (show count)
+  popupInterval  Int? // Number of chapters to read before showing popup (only for POPUP type)
+  priority       Int            @default(0) // Higher priority = shown first
+  campaignId     String?
+  targetAudience Json? // Targeting rules: {categories: [], roles: [], devices: [], minChaptersRead: 0}
+  createdById    String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  campaign       Campaign?      @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  createdBy      User?          @relation("AdCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  adImpressions  AdImpression[]
+  adClicks       AdClick[]
 
   @@index([type])
   @@index([position])
   @@index([isActive])
   @@index([startDate])
   @@index([endDate])
+  @@index([priority])
+  @@index([campaignId])
   @@index([createdById])
   @@map("ads")
+}
+
+model AdImpression {
+  id        String   @id @default(cuid())
+  adId      String
+  userId    String?
+  ipAddress String?
+  userAgent String?
+  device    String? // 'mobile', 'tablet', 'desktop'
+  location  String? // Country/Region
+  createdAt DateTime @default(now())
+  ad        Ad       @relation(fields: [adId], references: [id], onDelete: Cascade)
+  user      User?    @relation("AdImpressionUser", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([adId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([ipAddress])
+  @@index([device])
+  @@map("ad_impressions")
+}
+
+model AdClick {
+  id        String   @id @default(cuid())
+  adId      String
+  userId    String?
+  ipAddress String?
+  userAgent String?
+  device    String? // 'mobile', 'tablet', 'desktop'
+  location  String? // Country/Region
+  createdAt DateTime @default(now())
+  ad        Ad       @relation(fields: [adId], references: [id], onDelete: Cascade)
+  user      User?    @relation("AdClickUser", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([adId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([ipAddress])
+  @@index([device])
+  @@map("ad_clicks")
 }
 
 enum AdType {
@@ -459,7 +550,7 @@ model Page {
 
 model Settings {
   id                       String   @id @default(cuid())
-  siteName                 String   @default("Web Truyen Tien Hung")
+  siteName                 String   @default("Web Truyện HungYeu")
   siteDescription          String?  @db.Text
   siteLogo                 String?
   siteFavicon              String?
@@ -539,4 +630,44 @@ model RefreshToken {
   @@index([userId])
   @@index([expiresAt])
   @@map("refresh_tokens")
+}
+
+// System Notifications
+model Notification {
+  id          String               @id @default(cuid())
+  title       String
+  content     String               @db.Text
+  type        NotificationType
+  priority    NotificationPriority @default(NORMAL)
+  targetRole  UserRole? // null = all users, or specific role
+  sendEmail   Boolean              @default(false) // Send via email
+  isActive    Boolean              @default(true)
+  createdById String
+  createdBy   User                 @relation("NotificationCreator", fields: [createdById], references: [id])
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  // Relations
+  recipients NotificationRecipient[]
+
+  @@index([type])
+  @@index([targetRole])
+  @@index([isActive])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model NotificationRecipient {
+  id             String       @id @default(cuid())
+  notificationId String
+  userId         String
+  isRead         Boolean      @default(false)
+  readAt         DateTime?
+  createdAt      DateTime     @default(now())
+  notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@unique([notificationId, userId])
+  @@index([userId, isRead])
+  @@index([notificationId])
+  @@map("notification_recipients")
 }

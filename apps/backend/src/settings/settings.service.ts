@@ -17,7 +17,7 @@ export class SettingsService {
       if (!settings) {
         settings = await this.prisma.settings.create({
           data: {
-            siteName: 'Web Truyen Tien Hung',
+            siteName: 'Web Truyện HungYeu',
             siteDescription: 'Nền tảng đọc truyện online',
             maintenanceMode: false,
             allowRegistration: true,
@@ -34,7 +34,7 @@ export class SettingsService {
           // Database connection error - return default settings
           this.logger.warn('Database unavailable, returning default settings');
           return {
-            siteName: 'Web Truyen Tien Hung',
+            siteName: 'Web Truyện HungYeu',
             siteDescription: 'Nền tảng đọc truyện online',
             maintenanceMode: false,
             allowRegistration: true,

@@ -20,6 +20,7 @@ import { RatingsModule } from './ratings/ratings.module';
 import { SearchModule } from './search/search.module';
 import { PagesModule } from './pages/pages.module';
 import { SettingsModule } from './settings/settings.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { MiddlewareModule } from './common/middleware/middleware.module';
 import { MaintenanceMiddleware } from './common/middleware/maintenance.middleware';
@@ -68,6 +69,7 @@ import { HealthController } from './health/health.controller';
     SearchModule,
     PagesModule,
     SettingsModule,
+    NotificationsModule,
     MiddlewareModule, // Must be imported to provide MaintenanceMiddleware
   ],
   controllers: [HealthController],

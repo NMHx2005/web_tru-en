@@ -91,10 +91,12 @@ export class StoriesService {
     if (query.status) {
       where.status = query.status as StoryStatus;
     } else {
-      // Default: only show published stories for non-authors
+      // Default: only show published stories (exclude drafts) for non-authors
       if (!userId) {
         where.isPublished = true;
-        where.status = StoryStatus.PUBLISHED;
+        where.status = {
+          not: StoryStatus.DRAFT, // Exclude drafts, allow PUBLISHED, ONGOING, COMPLETED, ARCHIVED
+        };
       }
     }
 
@@ -801,7 +803,9 @@ export class StoriesService {
       return await this.prisma.story.findMany({
         where: {
           isPublished: true,
-          status: StoryStatus.PUBLISHED,
+          status: {
+            not: StoryStatus.DRAFT, // Exclude drafts only
+          },
         },
         include: storyInclude,
         orderBy: { createdAt: 'desc' },
@@ -813,7 +817,9 @@ export class StoriesService {
         return await this.prisma.story.findMany({
           where: {
             isPublished: true,
-            status: StoryStatus.PUBLISHED,
+            status: {
+              not: StoryStatus.DRAFT,
+            },
           },
           select: safeStorySelect,
           orderBy: { createdAt: 'desc' },
@@ -835,7 +841,9 @@ export class StoriesService {
       const storiesWithMonthlyRatings = await this.prisma.story.findMany({
         where: {
           isPublished: true,
-          status: StoryStatus.PUBLISHED,
+          status: {
+            not: StoryStatus.DRAFT, // Exclude drafts only
+          },
           ratings: {
             some: {
               createdAt: {
@@ -898,7 +906,9 @@ export class StoriesService {
       const stories = await this.prisma.story.findMany({
         where: {
           isPublished: true,
-          status: StoryStatus.PUBLISHED,
+          status: {
+            not: StoryStatus.DRAFT, // Exclude drafts only
+          },
         },
         include: storyInclude,
       });
@@ -981,7 +991,9 @@ export class StoriesService {
       return await this.prisma.story.findMany({
         where: {
           isPublished: true,
-          status: StoryStatus.PUBLISHED,
+          status: {
+            not: StoryStatus.DRAFT, // Exclude drafts only
+          },
           ratingCount: {
             gte: 5, // At least 5 ratings to be considered
           },
@@ -999,7 +1011,9 @@ export class StoriesService {
         return await this.prisma.story.findMany({
           where: {
             isPublished: true,
-            status: StoryStatus.PUBLISHED,
+            status: {
+              not: StoryStatus.DRAFT, // Exclude drafts only
+            },
             ratingCount: {
               gte: 5,
             },
@@ -1046,7 +1060,9 @@ export class StoriesService {
       return await this.prisma.story.findMany({
         where: {
           isPublished: true,
-          status: StoryStatus.PUBLISHED,
+          status: {
+            not: StoryStatus.DRAFT, // Exclude drafts only
+          },
         },
         include: storyInclude,
         orderBy: [
@@ -1061,7 +1077,9 @@ export class StoriesService {
         return await this.prisma.story.findMany({
           where: {
             isPublished: true,
-            status: StoryStatus.PUBLISHED,
+            status: {
+              not: StoryStatus.DRAFT, // Exclude drafts only
+            },
           },
           select: safeStorySelect,
           orderBy: [
@@ -1251,7 +1269,9 @@ export class StoriesService {
       where: {
         id: { not: storyId },
         isPublished: true,
-        status: StoryStatus.PUBLISHED,
+        status: {
+          not: StoryStatus.DRAFT, // Exclude drafts only
+        },
         OR: [
           ...(categoryIds.length > 0 ? [{
             storyCategories: {
@@ -1323,7 +1343,9 @@ export class StoriesService {
       where: {
         id: { notIn: Array.from(readStoryIds) },
         isPublished: true,
-        status: StoryStatus.PUBLISHED,
+        status: {
+          not: StoryStatus.DRAFT, // Exclude drafts only
+        },
         OR: [
           ...(categoryIds.size > 0 ? [{
             storyCategories: {

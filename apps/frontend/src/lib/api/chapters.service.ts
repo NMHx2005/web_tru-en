@@ -118,6 +118,11 @@ export const chaptersService = {
         return response.data;
     },
 
+    unpublish: async (storySlug: string, id: string): Promise<ApiResponse<Chapter>> => {
+        const response = await apiClient.post<Chapter>(`/stories/${storySlug}/chapters/${id}/unpublish`);
+        return response.data;
+    },
+
     // Admin endpoints
     getAllForAdmin: async (params?: {
         page?: number;
@@ -157,24 +162,30 @@ export const chaptersService = {
         draft: number;
         totalViews: number;
     }> => {
-        const response = await apiClient.get<{ total: number; published: number; draft: number; totalViews: number }>('/admin/chapters/stats');
-        // Handle ApiResponse wrapper
-        if ((response.data as any)?.data) {
-            return (response.data as any).data;
+        const response = await apiClient.get<any>('/admin/chapters/stats');
+        
+        // Handle ApiResponse wrapper (if exists)
+        if (response.data?.success !== undefined && response.data?.data) {
+            return response.data.data;
         }
-        return (response.data as unknown as { total: number; published: number; draft: number; totalViews: number });
+        
+        // Return direct data
+        return response.data;
     },
 
     getChaptersChartData: async (days: number = 30): Promise<{
         labels: string[];
         data: number[];
     }> => {
-        const response = await apiClient.get<{ labels: string[]; data: number[] }>(`/admin/chapters/chart-data?days=${days}`);
-        // Handle ApiResponse wrapper
-        if ((response.data as any)?.data) {
-            return (response.data as any).data;
+        const response = await apiClient.get<any>(`/admin/chapters/chart-data?days=${days}`);
+        
+        // Handle ApiResponse wrapper (if exists)
+        if (response.data?.success !== undefined && response.data?.data) {
+            return response.data.data;
         }
-        return (response.data as unknown as { labels: string[]; data: number[] });
+        
+        // Return direct data
+        return response.data;
     },
 };
 

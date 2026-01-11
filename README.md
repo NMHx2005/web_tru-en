@@ -1,4 +1,4 @@
-# Web Truyen Tien Hung
+# Web Truyện HungYeu
 
 Production-ready monorepo foundation for a story/manga reading platform.
 

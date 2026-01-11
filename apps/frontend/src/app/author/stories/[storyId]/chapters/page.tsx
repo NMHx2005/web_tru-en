@@ -9,15 +9,17 @@ import { Footer } from '@/components/layouts/footer';
 import { Loading } from '@/components/ui/loading';
 import { ConfirmModal } from '@/components/ui/confirm-modal';
 import { ToastContainer, useToast } from '@/components/ui/toast';
-import { useChapters, useDeleteChapter, usePublishChapter } from '@/lib/api/hooks/use-chapters';
+import { useChapters, useDeleteChapter, usePublishChapter, useUnpublishChapter } from '@/lib/api/hooks/use-chapters';
 import { useStory } from '@/lib/api/hooks/use-stories';
-import { useMyApprovals, ApprovalRequest } from '@/lib/api/hooks/use-approvals';
+import { useMyApprovals } from '@/lib/api/hooks/use-approvals';
 import { ProtectedRoute } from '@/components/layouts/protected-route';
+import { useAuth } from '@/lib/api/hooks/use-auth';
 
 export default function ChapterManagementPage() {
     const params = useParams();
     const router = useRouter();
     const storyIdOrSlug = params.storyId as string;
+    const { user } = useAuth();
 
     // storyId can be either ID or slug - try as slug first
     const { data: story, isLoading: storyLoading } = useStory(storyIdOrSlug);
@@ -26,11 +28,23 @@ export default function ChapterManagementPage() {
 
     const deleteMutation = useDeleteChapter(storySlug);
     const publishMutation = usePublishChapter(storySlug);
+    const unpublishMutation = useUnpublishChapter(storySlug);
     const { toasts, showToast, removeToast } = useToast();
+    
+    const isAdmin = user?.role === 'ADMIN';
 
-    // Get approval requests to check status
+    // Get approval requests to check story approval status
     const { data: approvalsResponse } = useMyApprovals({ limit: 1000 });
     const approvals = approvalsResponse?.data || [];
+
+    // Check if story has approval request
+    const storyApprovalRequest = useMemo(() => {
+        if (!story?.id) return null;
+        return approvals.find((approval: any) => 
+            approval.storyId === story.id && 
+            approval.type === 'STORY_PUBLISH'
+        );
+    }, [approvals, story?.id]);
 
     // Filters and pagination
     const [search, setSearch] = useState('');
@@ -124,36 +138,26 @@ export default function ChapterManagementPage() {
 
     const handlePublish = async (id: string) => {
         try {
-            const result = await publishMutation.mutateAsync(id);
-            // Show success toast
-            // result is ApiResponse<Chapter>, so message is at result.message, not result.data.message
-            const message = result?.message || 'Yêu cầu xuất bản đã được gửi thành công. Vui lòng chờ admin phê duyệt.';
-            showToast(message, 'success');
+            await publishMutation.mutateAsync(id);
+            showToast('Xuất bản chương thành công', 'success');
         } catch (error: any) {
             console.error('Error publishing chapter:', error);
-            // Show error toast
-            const errorMessage = error?.response?.data?.error || error?.response?.data?.message || error?.message || 'Có lỗi xảy ra khi gửi yêu cầu xuất bản';
+            const errorMessage = error?.response?.data?.error || error?.response?.data?.message || error?.message || 'Có lỗi xảy ra khi xuất bản chương';
             showToast(errorMessage, 'error');
         }
     };
 
-    // Create a map of chapterId -> approval request
-    const chapterApprovalMap = useMemo(() => {
-        const map = new Map<string, ApprovalRequest>();
-        approvals.forEach((approval: ApprovalRequest) => {
-            if (approval.chapterId && approval.type === 'CHAPTER_PUBLISH') {
-                map.set(approval.chapterId, approval);
-            }
-        });
-        return map;
-    }, [approvals]);
-
-    // Get approval status for a chapter
-    const getChapterApprovalStatus = (chapterId: string) => {
-        const approval = chapterApprovalMap.get(chapterId);
-        if (!approval) return null;
-        return approval.status;
+    const handleUnpublish = async (id: string) => {
+        try {
+            await unpublishMutation.mutateAsync(id);
+            showToast('Thu hồi chương thành công', 'success');
+        } catch (error: any) {
+            console.error('Error unpublishing chapter:', error);
+            const errorMessage = error?.response?.data?.error || error?.response?.data?.message || error?.message || 'Có lỗi xảy ra khi thu hồi chương';
+            showToast(errorMessage, 'error');
+        }
     };
+
 
     return (
         <ProtectedRoute>
@@ -204,6 +208,42 @@ export default function ChapterManagementPage() {
                                     </div>
                                 </div>
                             </div>
+
+                            {/* Story Not Published Warning */}
+                            {story && !story.isPublished && !isAdmin && (
+                                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-6">
+                                    <div className="flex items-start gap-3">
+                                        <svg className="w-6 h-6 text-yellow-600 dark:text-yellow-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                        </svg>
+                                        <div className="flex-1">
+                                            <h3 className="text-sm font-semibold text-yellow-800 dark:text-yellow-300 mb-1">
+                                                Truyện chưa được xuất bản
+                                            </h3>
+                                            <p className="text-sm text-yellow-700 dark:text-yellow-400 mb-3">
+                                                {storyApprovalRequest?.status === 'PENDING' ? (
+                                                    <>Truyện của bạn đang chờ phê duyệt. Sau khi truyện được phê duyệt và xuất bản, bạn có thể xuất bản các chương.</>
+                                                ) : storyApprovalRequest?.status === 'REJECTED' ? (
+                                                    <>Yêu cầu xuất bản truyện đã bị từ chối. Vui lòng chỉnh sửa và gửi lại yêu cầu phê duyệt từ trang Dashboard.</>
+                                                ) : (
+                                                    <>Bạn cần gửi yêu cầu phê duyệt cho truyện trước. Sau khi truyện được phê duyệt và xuất bản, bạn có thể xuất bản các chương. Vui lòng quay lại Dashboard và gửi yêu cầu phê duyệt.</>
+                                                )}
+                                            </p>
+                                            {!storyApprovalRequest && (
+                                                <Link
+                                                    href="/author/dashboard"
+                                                    className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-600 hover:bg-yellow-700 dark:bg-yellow-700 dark:hover:bg-yellow-800 text-white rounded-lg text-sm font-medium transition-colors"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                                                    </svg>
+                                                    Quay lại Dashboard để gửi phê duyệt
+                                                </Link>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Filters */}
                             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 mb-6 border border-gray-200 dark:border-gray-700">
@@ -347,100 +387,54 @@ export default function ChapterManagementPage() {
                                                             >
                                                                 Chỉnh sửa
                                                             </Link>
-                                                            {(() => {
-                                                                const approvalStatus = getChapterApprovalStatus(chapter.id);
-                                                                const isPending = publishMutation.isPending;
-
-                                                                // If already published, don't show button
-                                                                if (chapter.isPublished) {
-                                                                    return null;
-                                                                }
-
-                                                                // If approval is pending
-                                                                if (approvalStatus === 'PENDING') {
-                                                                    return (
-                                                                        <button
-                                                                            disabled
-                                                                            className="px-4 py-2 bg-yellow-500 dark:bg-yellow-600 text-white rounded-lg text-sm font-medium cursor-not-allowed opacity-75 flex items-center gap-2"
-                                                                        >
+                                                            {chapter.isPublished ? (
+                                                                <button
+                                                                    onClick={() => handleUnpublish(chapter.id)}
+                                                                    disabled={unpublishMutation.isPending}
+                                                                    className="px-4 py-2 bg-orange-500 hover:bg-orange-600 dark:bg-orange-600 dark:hover:bg-orange-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
+                                                                >
+                                                                    {unpublishMutation.isPending ? (
+                                                                        <>
                                                                             <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
                                                                                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                                                                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                                                             </svg>
-                                                                            Đang chờ phê duyệt
-                                                                        </button>
-                                                                    );
-                                                                }
-
-                                                                // If approval is approved (but not published yet - edge case)
-                                                                if (approvalStatus === 'APPROVED') {
-                                                                    return (
-                                                                        <button
-                                                                            disabled
-                                                                            className="px-4 py-2 bg-green-500 dark:bg-green-600 text-white rounded-lg text-sm font-medium cursor-not-allowed opacity-75 flex items-center gap-2"
-                                                                        >
+                                                                            Đang thu hồi...
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                                                                            </svg>
+                                                                            Thu hồi
+                                                                        </>
+                                                                    )}
+                                                                </button>
+                                                            ) : (
+                                                                <button
+                                                                    onClick={() => handlePublish(chapter.id)}
+                                                                    disabled={publishMutation.isPending || (story && !story.isPublished && !isAdmin)}
+                                                                    className="px-4 py-2 bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                                                    title={story && !story.isPublished && !isAdmin ? 'Truyện cần được xuất bản trước' : ''}
+                                                                >
+                                                                    {publishMutation.isPending ? (
+                                                                        <>
+                                                                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                                            </svg>
+                                                                            Đang xử lý...
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
                                                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                                                             </svg>
-                                                                            Đã được phê duyệt
-                                                                        </button>
-                                                                    );
-                                                                }
-
-                                                                // If approval is rejected, allow resubmit
-                                                                if (approvalStatus === 'REJECTED') {
-                                                                    return (
-                                                                        <button
-                                                                            onClick={() => handlePublish(chapter.id)}
-                                                                            disabled={isPending}
-                                                                            className="px-4 py-2 bg-orange-500 hover:bg-orange-600 dark:bg-orange-600 dark:hover:bg-orange-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
-                                                                        >
-                                                                            {isPending ? (
-                                                                                <>
-                                                                                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                                                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                                                                    </svg>
-                                                                                    Đang gửi...
-                                                                                </>
-                                                                            ) : (
-                                                                                <>
-                                                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                                                                    </svg>
-                                                                                    Gửi lại phê duyệt
-                                                                                </>
-                                                                            )}
-                                                                        </button>
-                                                                    );
-                                                                }
-
-                                                                // No approval request yet - show normal publish button
-                                                                return (
-                                                                    <button
-                                                                        onClick={() => handlePublish(chapter.id)}
-                                                                        disabled={isPending}
-                                                                        className="px-4 py-2 bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
-                                                                    >
-                                                                        {isPending ? (
-                                                                            <>
-                                                                                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                                                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                                                                </svg>
-                                                                                Đang xử lý...
-                                                                            </>
-                                                                        ) : (
-                                                                            <>
-                                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                                                                </svg>
-                                                                                Xuất bản
-                                                                            </>
-                                                                        )}
-                                                                    </button>
-                                                                );
-                                                            })()}
+                                                                            Xuất bản
+                                                                        </>
+                                                                    )}
+                                                                </button>
+                                                            )}
                                                             <button
                                                                 onClick={() => handleDelete(chapter.id, chapter.title)}
                                                                 disabled={deleteMutation.isPending}

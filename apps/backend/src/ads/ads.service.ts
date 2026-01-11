@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAdDto, AdType, AdPosition } from './dto/create-ad.dto';
 import { UpdateAdDto } from './dto/update-ad.dto';
@@ -233,31 +233,165 @@ export class AdsService {
     }
 
     /**
-     * Increment view count for an ad
+     * Track ad impression (view)
+     * With fraud prevention: duplicate detection
+     */
+    async trackImpression(
+        adId: string,
+        metadata: {
+            userId?: string;
+            ipAddress?: string;
+            userAgent?: string;
+            device?: string;
+        },
+    ) {
+        // Check for duplicate impressions (within 1 minute from same user/IP)
+        const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
+
+        // Build OR conditions dynamically
+        const orConditions: any[] = [];
+        if (metadata.userId) {
+            orConditions.push({ userId: metadata.userId });
+        }
+        if (metadata.ipAddress) {
+            orConditions.push({ ipAddress: metadata.ipAddress });
+        }
+
+        const recentImpression = await this.prisma.adImpression.findFirst({
+            where: {
+                adId,
+                createdAt: { gte: oneMinuteAgo },
+                ...(orConditions.length > 0 && { OR: orConditions }),
+            },
+        });
+
+        if (recentImpression) {
+            // Skip duplicate impression
+            return { tracked: false, reason: 'duplicate' };
+        }
+
+        // Track impression
+        await Promise.all([
+            this.prisma.adImpression.create({
+                data: {
+                    adId,
+                    userId: metadata.userId,
+                    ipAddress: metadata.ipAddress,
+                    userAgent: metadata.userAgent,
+                    device: metadata.device || this.detectDevice(metadata.userAgent),
+                },
+            }),
+            this.prisma.ad.update({
+                where: { id: adId },
+                data: {
+                    impressions: { increment: 1 },
+                    viewCount: { increment: 1 }, // Keep for backward compatibility
+                },
+            }),
+        ]);
+
+        return { tracked: true };
+    }
+
+    /**
+     * Track ad click
+     * With fraud prevention: rate limiting, duplicate detection
+     */
+    async trackClick(
+        adId: string,
+        metadata: {
+            userId?: string;
+            ipAddress?: string;
+            userAgent?: string;
+            device?: string;
+        },
+    ) {
+        // Check for excessive clicks (max 3 clicks per 5 minutes from same user/IP)
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+
+        // Build OR conditions dynamically
+        const orConditions: any[] = [];
+        if (metadata.userId) {
+            orConditions.push({ userId: metadata.userId });
+        }
+        if (metadata.ipAddress) {
+            orConditions.push({ ipAddress: metadata.ipAddress });
+        }
+
+        const recentClicks = await this.prisma.adClick.count({
+            where: {
+                adId,
+                createdAt: { gte: fiveMinutesAgo },
+                ...(orConditions.length > 0 && { OR: orConditions }),
+            },
+        });
+
+        if (recentClicks >= 3) {
+            throw new BadRequestException('Too many clicks. Please try again later.');
+        }
+
+        // Track click
+        await Promise.all([
+            this.prisma.adClick.create({
+                data: {
+                    adId,
+                    userId: metadata.userId,
+                    ipAddress: metadata.ipAddress,
+                    userAgent: metadata.userAgent,
+                    device: metadata.device || this.detectDevice(metadata.userAgent),
+                },
+            }),
+            this.prisma.ad.update({
+                where: { id: adId },
+                data: {
+                    clickCount: { increment: 1 },
+                },
+            }),
+        ]);
+
+        return { tracked: true };
+    }
+
+    /**
+     * Legacy: Increment view count (deprecated, use trackImpression)
+     * @deprecated Use trackImpression instead
      */
     async incrementViewCount(id: string) {
         await this.prisma.ad.update({
             where: { id },
             data: {
-                viewCount: {
-                    increment: 1,
-                },
+                viewCount: { increment: 1 },
             },
         });
     }
 
     /**
-     * Increment click count for an ad
+     * Legacy: Increment click count (deprecated, use trackClick)
+     * @deprecated Use trackClick instead
      */
     async incrementClickCount(id: string) {
         await this.prisma.ad.update({
             where: { id },
             data: {
-                clickCount: {
-                    increment: 1,
-                },
+                clickCount: { increment: 1 },
             },
         });
+    }
+
+    /**
+     * Helper: Detect device type from user agent
+     */
+    private detectDevice(userAgent?: string): string {
+        if (!userAgent) return 'unknown';
+
+        const ua = userAgent.toLowerCase();
+        if (/(tablet|ipad|playbook|silk)|(android(?!.*mobi))/i.test(ua)) {
+            return 'tablet';
+        }
+        if (/mobile|iphone|ipod|blackberry|opera mini|iemobile|windows phone/i.test(ua)) {
+            return 'mobile';
+        }
+        return 'desktop';
     }
 }
 

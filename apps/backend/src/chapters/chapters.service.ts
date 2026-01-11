@@ -317,7 +317,7 @@ export class ChaptersService {
             throw new BadRequestException('Chương này đã được xuất bản');
         }
 
-        // Nếu story đã được publish → Cho phép tự publish chapter (không cần approval)
+        // Nếu story đã được publish → Cho phép tự publish chapter
         if (chapter.story.isPublished) {
             return this.prisma.chapter.update({
                 where: { id },
@@ -328,7 +328,7 @@ export class ChaptersService {
             });
         }
 
-        // Nếu story chưa publish → Cần approval (chỉ áp dụng cho non-admin)
+        // Nếu story chưa publish → Chỉ admin mới có thể publish chapter
         const user = await this.prisma.user.findUnique({ where: { id: userId } });
         if (user && user.role === UserRole.ADMIN) {
             // Admin có thể publish chapter ngay cả khi story chưa publish
@@ -341,34 +341,49 @@ export class ChaptersService {
             });
         }
 
-        // Check if there's already a pending approval request
-        const existingRequest = await this.prisma.approvalRequest.findFirst({
-            where: {
-                userId,
-                chapterId: id,
-                status: ApprovalStatus.PENDING,
+        // Non-admin users cannot publish chapters if story is not published
+        throw new BadRequestException('Truyện cần được xuất bản trước khi bạn có thể xuất bản chương. Vui lòng gửi yêu cầu phê duyệt cho truyện từ trang Dashboard.');
+    }
+
+    async unpublish(id: string, userId: string) {
+        const chapter = await this.prisma.chapter.findUnique({
+            where: { id },
+            select: {
+                id: true,
+                title: true,
+                isPublished: true,
+                story: {
+                    select: {
+                        id: true,
+                        authorId: true,
+                    },
+                },
             },
         });
 
-        if (existingRequest) {
-            throw new BadRequestException('Bạn đã có yêu cầu phê duyệt đang chờ xử lý cho chương này');
+        if (!chapter) {
+            throw new NotFoundException('Không tìm thấy chương');
         }
 
-        // Create approval request (chỉ khi story chưa publish và user không phải admin)
-        const approvalRequest = await this.approvalsService.createRequest(
-            userId,
-            null,
-            id,
-            {
-                type: ApprovalType.CHAPTER_PUBLISH,
-                message: `Yêu cầu xuất bản chương: ${chapter.title}`,
+        // Check permission
+        if (chapter.story.authorId !== userId) {
+            const user = await this.prisma.user.findUnique({ where: { id: userId } });
+            if (!user || user.role !== UserRole.ADMIN) {
+                throw new ForbiddenException('Bạn không có quyền thu hồi chương này');
             }
-        );
+        }
 
-        return {
-            message: 'Truyện chưa được xuất bản. Yêu cầu phê duyệt đã được gửi thành công.',
-            approvalRequest,
-        };
+        if (!chapter.isPublished) {
+            throw new BadRequestException('Chương này chưa được xuất bản');
+        }
+
+        return this.prisma.chapter.update({
+            where: { id },
+            data: {
+                isPublished: false,
+            },
+            include: chapterWithStoryInclude,
+        });
     }
 
     async incrementViewCount(storySlug: string, chapterSlug: string) {
@@ -389,14 +404,27 @@ export class ChaptersService {
         });
 
         if (chapter) {
-            await this.prisma.chapter.update({
-                where: { id: chapter.id },
-                data: {
-                    viewCount: {
-                        increment: 1,
+            // Increment both chapter and story view count
+            await Promise.all([
+                // Increment chapter view count
+                this.prisma.chapter.update({
+                    where: { id: chapter.id },
+                    data: {
+                        viewCount: {
+                            increment: 1,
+                        },
                     },
-                },
-            });
+                }),
+                // Increment story view count
+                this.prisma.story.update({
+                    where: { id: story.id },
+                    data: {
+                        viewCount: {
+                            increment: 1,
+                        },
+                    },
+                }),
+            ]);
         }
     }
 

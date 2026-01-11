@@ -98,6 +98,12 @@ export class ChaptersController {
     publish(@Param('id') id: string, @CurrentUser() user: any) {
         return this.chaptersService.publish(id, user.id);
     }
+
+    @Post(':id/unpublish')
+    @UseGuards(JwtAuthGuard)
+    unpublish(@Param('id') id: string, @CurrentUser() user: any) {
+        return this.chaptersService.unpublish(id, user.id);
+    }
 }
 
 @Controller('admin/chapters')

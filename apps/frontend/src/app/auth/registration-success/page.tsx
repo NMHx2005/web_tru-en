@@ -105,7 +105,7 @@ export default function RegistrationSuccessPage() {
                 </li>
                 <li className="flex items-start">
                   <span className="mr-2 text-gray-400">2.</span>
-                  <span>Tìm email từ Web Truyện Tiến Hùng</span>
+                  <span>Tìm email từ Web HungYeu</span>
                 </li>
                 <li className="flex items-start">
                   <span className="mr-2 text-gray-400">3.</span>
@@ -173,8 +173,8 @@ export default function RegistrationSuccessPage() {
 
               {message && (
                 <div className={`mt-3 p-3 rounded text-sm ${message.includes('thành công')
-                    ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800'
-                    : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'
+                  ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800'
+                  : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'
                   }`}>
                   {message}
                 </div>

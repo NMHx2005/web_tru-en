@@ -84,7 +84,18 @@ export const usePublishChapter = (storySlug: string) => {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['chapters', storySlug] });
             queryClient.invalidateQueries({ queryKey: ['chapter'] });
-            queryClient.invalidateQueries({ queryKey: ['approvals'] }); // Refresh approval requests
+        },
+    });
+};
+
+export const useUnpublishChapter = (storySlug: string) => {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: (id: string) => chaptersService.unpublish(storySlug, id),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['chapters', storySlug] });
+            queryClient.invalidateQueries({ queryKey: ['chapter'] });
         },
     });
 };

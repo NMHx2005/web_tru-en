@@ -158,7 +158,9 @@ export class SearchService {
     const stories = await this.prisma.story.findMany({
       where: {
         isPublished: true,
-        status: StoryStatus.PUBLISHED,
+        status: {
+          not: StoryStatus.DRAFT, // Exclude drafts only
+        },
         title: {
           contains: searchTerm,
           mode: 'insensitive',

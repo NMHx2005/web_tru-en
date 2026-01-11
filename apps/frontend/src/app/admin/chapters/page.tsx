@@ -132,14 +132,23 @@ export default function AdminChaptersPage() {
                     <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm animate-pulse">
                         <div className="h-64 bg-gray-200 dark:bg-gray-700 rounded"></div>
                     </div>
-                ) : chartData ? (
+                ) : chartData && chartData.data && chartData.labels ? (
                     <LineChart
                         data={chartData.data}
                         labels={chartData.labels}
-                        title="Số chương được tạo theo thời gian"
+                        title="Số chương được tạo theo thời gian (30 ngày gần đây)"
                         color="#ec4899"
                     />
-                ) : null}
+                ) : (
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                            Số chương được tạo theo thời gian
+                        </h3>
+                        <div className="h-64 flex items-center justify-center text-gray-500 dark:text-gray-400">
+                            Không có dữ liệu biểu đồ trong 30 ngày gần đây
+                        </div>
+                    </div>
+                )}
 
                 {/* Filters and Actions */}
                 <div className="bg-white dark:bg-gray-800 rounded-lg p-4 sm:p-6 shadow-sm">

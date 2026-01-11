@@ -126,7 +126,7 @@ export default function EditStoryPage() {
 
     if (storyLoading) {
         return (
-            <ProtectedRoute requiredRole={[UserRole.UPLOADER, UserRole.ADMIN]}>
+            <ProtectedRoute>
                 <div className="min-h-screen flex items-center justify-center">
                     <Loading />
                 </div>
@@ -136,7 +136,7 @@ export default function EditStoryPage() {
 
     if (!story) {
         return (
-            <ProtectedRoute requiredRole={[UserRole.UPLOADER, UserRole.ADMIN]}>
+            <ProtectedRoute>
                 <div className="min-h-screen flex items-center justify-center">
                     <div className="text-center">
                         <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
@@ -152,7 +152,7 @@ export default function EditStoryPage() {
     }
 
     return (
-        <ProtectedRoute requiredRole={[UserRole.UPLOADER, UserRole.ADMIN]}>
+        <ProtectedRoute>
             <div className="min-h-screen bg-[#FFF2F8] dark:bg-gray-900 transition-colors duration-300">
                 <Sidebar />
                 <div className="md:ml-[120px] pb-16 md:pb-0">

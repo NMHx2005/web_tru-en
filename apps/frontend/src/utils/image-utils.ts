@@ -31,9 +31,11 @@ export const ImageSizes = {
   bookThumbnail: '(max-width: 640px) 96px, 96px',
 
   // Ad sizes
+  banner: '(max-width: 768px) 100vw, (max-width: 1200px) 728px, 970px',
   adBanner: '(max-width: 768px) 100vw, 800px',
   adPopup: '(max-width: 768px) 90vw, 800px',
   adFull: '100vw',
+  sidebar: '(max-width: 1024px) 0px, 256px',
 
   // General responsive
   responsive: '(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw',

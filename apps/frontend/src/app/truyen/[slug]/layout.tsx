@@ -63,7 +63,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       title: story.title,
       description,
       url: storyUrl,
-      siteName: 'Web Truyen Tien Hung',
+      siteName: 'Web Truyện HungYeu',
       images: [
         {
           url: coverImage,

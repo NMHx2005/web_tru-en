@@ -338,10 +338,8 @@ export default function AdminAdsPage() {
                                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
                             >
                                 <option value="">Tất cả</option>
-                                <option value={AdPosition.TOP}>Top</option>
                                 <option value={AdPosition.BOTTOM}>Bottom</option>
                                 <option value={AdPosition.SIDEBAR_LEFT}>Sidebar Left</option>
-                                <option value={AdPosition.SIDEBAR_RIGHT}>Sidebar Right</option>
                                 <option value={AdPosition.INLINE}>Inline</option>
                             </select>
                         </div>
@@ -1113,6 +1111,20 @@ function AdFormModal({
     const [uploadedFile, setUploadedFile] = useState<File | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(ad?.imageUrl || null);
 
+    // Auto-set position based on type
+    useEffect(() => {
+        if (formData.type === AdType.POPUP) {
+            // POPUP - backend sẽ xử lý position (giữ giá trị hiện tại, backend có thể bỏ qua)
+            // Không cần set position, nhưng vẫn giữ trong formData để không lỗi validation
+        } else if (formData.type === AdType.BANNER) {
+            // BANNER chỉ có BOTTOM
+            setFormData(prev => ({ ...prev, position: AdPosition.BOTTOM }));
+        } else if (formData.type === AdType.SIDEBAR) {
+            // SIDEBAR chỉ có SIDEBAR_LEFT
+            setFormData(prev => ({ ...prev, position: AdPosition.SIDEBAR_LEFT }));
+        }
+    }, [formData.type]);
+
     // Update preview when imageUrl changes
     useEffect(() => {
         if (formData.imageUrl && imageInputType === 'url') {
@@ -1183,6 +1195,10 @@ function AdFormModal({
                 startDate: formData.startDate || undefined,
                 endDate: formData.endDate || undefined,
                 popupInterval: formData.type === AdType.POPUP ? formData.popupInterval : undefined,
+                // Position đã được set tự động trong useEffect:
+                // - BANNER: BOTTOM
+                // - SIDEBAR: SIDEBAR_LEFT
+                // - POPUP: backend sẽ xử lý (giữ giá trị hiện tại, backend có thể bỏ qua)
             };
 
             if (ad) {
@@ -1280,12 +1296,7 @@ function AdFormModal({
                                         required={imageInputType === 'url'}
                                         value={formData.imageUrl}
                                         onChange={(e) => {
-                                            const newUrl = e.target.value;
-                                            setFormData({ ...formData, imageUrl: newUrl });
-                                            // Use setTimeout to avoid setState during render
-                                            setTimeout(() => {
-                                                setPreviewUrl(newUrl);
-                                            }, 0);
+                                            setFormData({ ...formData, imageUrl: e.target.value });
                                         }}
                                         placeholder="https://example.com/image.jpg"
                                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
@@ -1370,23 +1381,24 @@ function AdFormModal({
                             />
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Loại <span className="text-red-500">*</span>
-                                </label>
-                                <select
-                                    required
-                                    value={formData.type}
-                                    onChange={(e) => setFormData({ ...formData, type: e.target.value as AdType })}
-                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
-                                >
-                                    <option value={AdType.POPUP}>Popup</option>
-                                    <option value={AdType.BANNER}>Banner</option>
-                                    <option value={AdType.SIDEBAR}>Sidebar</option>
-                                </select>
-                            </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Loại <span className="text-red-500">*</span>
+                            </label>
+                            <select
+                                required
+                                value={formData.type}
+                                onChange={(e) => setFormData({ ...formData, type: e.target.value as AdType })}
+                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                            >
+                                <option value={AdType.POPUP}>Popup</option>
+                                <option value={AdType.BANNER}>Banner</option>
+                                <option value={AdType.SIDEBAR}>Sidebar</option>
+                            </select>
+                        </div>
 
+                        {/* Position field - chỉ hiển thị cho SIDEBAR type */}
+                        {formData.type === AdType.SIDEBAR && (
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     Vị trí <span className="text-red-500">*</span>
@@ -1397,14 +1409,22 @@ function AdFormModal({
                                     onChange={(e) => setFormData({ ...formData, position: e.target.value as AdPosition })}
                                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
                                 >
-                                    <option value={AdPosition.TOP}>Top</option>
-                                    <option value={AdPosition.BOTTOM}>Bottom</option>
                                     <option value={AdPosition.SIDEBAR_LEFT}>Sidebar Left</option>
-                                    <option value={AdPosition.SIDEBAR_RIGHT}>Sidebar Right</option>
-                                    <option value={AdPosition.INLINE}>Inline</option>
                                 </select>
                             </div>
-                        </div>
+                        )}
+
+                        {/* Hiển thị thông tin position cho POPUP và BANNER (read-only) */}
+                        {(formData.type === AdType.POPUP || formData.type === AdType.BANNER) && (
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Vị trí
+                                </label>
+                                <div className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-600 dark:text-gray-400">
+                                    {formData.type === AdType.POPUP ? 'Giữa màn hình (tự động)' : 'Bottom (tự động)'}
+                                </div>
+                            </div>
+                        )}
 
                         {/* Popup Interval - Only show for POPUP type */}
                         {formData.type === AdType.POPUP && (

@@ -9,7 +9,7 @@ import { ErrorBoundary } from '@/components/error-boundary';
 import { MaintenanceCheck } from '@/components/maintenance-check';
 import { getServerSettings } from '@/lib/api/server-settings';
 
-const quicksand = Quicksand({ 
+const quicksand = Quicksand({
   subsets: ['latin'],
   weight: ['300', '400', '500', '600', '700'],
   variable: '--font-quicksand',
@@ -18,18 +18,18 @@ const quicksand = Quicksand({
 
 // Default metadata values (fallback)
 const DEFAULT_METADATA = {
-  siteName: 'Web Truyen Tien Hung',
+  siteName: 'Web Truyện HungYeu',
   siteDescription: 'Nền tảng đọc truyện và tiểu thuyết trực tuyến. Khám phá hàng ngàn câu chuyện hay, đa dạng thể loại từ kiếm hiệp, tiên hiệp, ngôn tình đến khoa học viễn tưởng.',
-  siteUrl: process.env.NEXT_PUBLIC_SITE_URL || 'https://webtruyen.com',
+  siteUrl: process.env.NEXT_PUBLIC_SITE_URL || 'https://hungyeu.com',
   keywords: ['truyện', 'tiểu thuyết', 'đọc truyện', 'truyện online', 'manga', 'light novel', 'kiếm hiệp', 'tiên hiệp', 'ngôn tình'],
-  author: 'Web Truyen Team',
+  author: 'Web Truyện HungYeu Team',
 };
 
 // Generate metadata dynamically from settings
 export async function generateMetadata(): Promise<Metadata> {
   // Fetch settings from API
   const settings = await getServerSettings();
-  
+
   // Use settings if available, otherwise use defaults
   const siteName = settings?.siteName || DEFAULT_METADATA.siteName;
   const siteDescription = settings?.siteDescription || DEFAULT_METADATA.siteDescription;

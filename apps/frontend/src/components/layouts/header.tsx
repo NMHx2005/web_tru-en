@@ -8,6 +8,7 @@ import { ImageSizes } from '@/utils/image-utils';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/components/providers/theme-provider';
 import { useSearchSuggestions } from '@/lib/api/hooks/use-search';
+import { NotificationBell } from '@/components/notifications/notification-bell';
 
 export function Header() {
   const { user, isAuthenticated, isLoading, logout, isLoggingOut } = useAuth();
@@ -23,14 +24,21 @@ export function Header() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (searchQuery.trim().length >= 2) {
-      // Navigate to first suggestion if available, otherwise do nothing
-      if (suggestions && suggestions.length > 0) {
-        router.push(`/truyen/${suggestions[0].slug}`);
-        setSearchQuery('');
-        setShowSuggestions(false);
-      }
+    const trimmedQuery = searchQuery.trim();
+    
+    // Validate: require at least 2 characters
+    if (!trimmedQuery) {
+      return; // Don't navigate if empty
     }
+    
+    if (trimmedQuery.length < 2) {
+      // Optionally show feedback
+      return;
+    }
+    
+    // Navigate to search results page with query
+    router.push(`/search?q=${encodeURIComponent(trimmedQuery)}`);
+    setShowSuggestions(false);
   };
 
   const handleSuggestionClick = (slug: string) => {
@@ -195,6 +203,9 @@ export function Header() {
           )}
         </button>
 
+        {/* Notification Bell */}
+        {isAuthenticated && user && <NotificationBell />}
+
         {/* User Info or Login Button */}
         {!isLoading && (
           <>
@@ -327,38 +338,6 @@ export function Header() {
             )}
           </>
         )}
-
-        {/* Notification Bell */}
-        <button
-          type="button"
-          className="w-[36px] h-[36px] md:w-[40px] md:h-[40px] flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors duration-300 relative flex-shrink-0"
-          aria-label="Thông báo"
-        >
-          <svg
-            width="20"
-            height="20"
-            className="md:w-[24px] md:h-[24px] text-gray-700 dark:text-gray-300 transition-colors duration-300"
-            viewBox="0 0 24 24"
-            fill="none"
-          >
-            <path
-              d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M13.73 21a2 2 0 0 1-3.46 0"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-          {/* Notification Badge */}
-          <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-        </button>
       </div>
     </header>
   );

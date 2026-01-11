@@ -231,7 +231,7 @@ export function Footer() {
                 {/* Bottom Bar */}
                 <div className="pt-8 border-t border-gray-200 dark:border-gray-800 flex flex-col sm:flex-row items-center justify-between gap-4 transition-colors duration-300">
                     <p className="text-sm text-center sm:text-left text-gray-600 dark:text-gray-400 transition-colors duration-300">
-                        Copyright © {currentYear}. {settings?.siteName || 'Web Truyen Tien Hung'}. Tất cả quyền được bảo lưu.
+                        Copyright © {currentYear}. {settings?.siteName || 'Web Truyện HungYeu'}. Tất cả quyền được bảo lưu.
                     </p>
                     <div className="flex items-center gap-6 sm:gap-10 flex-wrap justify-center sm:justify-end">
                         <Link

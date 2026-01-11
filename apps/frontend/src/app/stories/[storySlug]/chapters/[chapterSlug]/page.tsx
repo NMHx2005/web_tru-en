@@ -14,6 +14,8 @@ import { useStory } from '@/lib/api/hooks/use-stories';
 import { useAuth } from '@/lib/api/hooks/use-auth';
 import { useActiveAds, useTrackAdView, useTrackAdClick } from '@/lib/api/hooks/use-ads';
 import { AdType, AdPosition } from '@/lib/api/ads.service';
+import { AdBanner } from '@/components/ads/ad-banner';
+import { AdSidebar } from '@/components/ads/ad-sidebar';
 import {
     markChapterCompleted,
     shouldShowPopup,
@@ -26,7 +28,7 @@ import {
     getVisitCount
 } from '@/utils/reading-tracker';
 import { useSaveProgress, useChapterProgress } from '@/lib/api/hooks/use-reading-history';
-import { BookOpen, Search } from 'lucide-react';
+import { BookOpen, Search, Menu, Type, ChevronLeft, ChevronRight, X } from 'lucide-react';
 
 export default function ChapterReadingPage() {
     const params = useParams();
@@ -41,17 +43,19 @@ export default function ChapterReadingPage() {
     const { user } = useAuth();
 
     const [fontSize, setFontSize] = useState(16);
-    // Load showChapterList state from localStorage, default to false
+    // Load showChapterList state from localStorage, default to true (always show)
     const [showChapterList, setShowChapterList] = useState(() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('showChapterList');
-            return saved === 'true';
+            return saved !== 'false'; // Default to true if not explicitly set to false
         }
-        return false;
+        return true; // Default to true
     });
     const [chapterSearchTerm, setChapterSearchTerm] = useState('');
     const [isChapterCompleted, setIsChapterCompleted] = useState(false);
+    const [showFloatingMenu, setShowFloatingMenu] = useState(false);
     const contentRef = useRef<HTMLDivElement>(null);
+    const floatingMenuRef = useRef<HTMLDivElement>(null);
     const hasTrackedCompletion = useRef<string | null>(null); // Track which chapterId has been tracked
     const saveProgressTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const lastSavedProgressRef = useRef<number>(-1);
@@ -64,7 +68,9 @@ export default function ChapterReadingPage() {
 
     // Fetch active ads
     const { data: popupAds = [] } = useActiveAds(AdType.POPUP);
+    const { data: topAds = [] } = useActiveAds(AdType.BANNER, AdPosition.TOP);
     const { data: bottomAds = [] } = useActiveAds(AdType.BANNER, AdPosition.BOTTOM);
+    const { data: inlineAds = [] } = useActiveAds(AdType.BANNER, AdPosition.INLINE);
     const trackAdView = useTrackAdView();
     const trackAdClick = useTrackAdClick();
 
@@ -102,6 +108,43 @@ export default function ChapterReadingPage() {
         const adIndex = getNextBannerAdIndex(bottomAdsList.length);
         return bottomAdsList[adIndex] || bottomAdsList[0] || null;
     }, [bottomAdsList]);
+
+    // Process content with inline ads
+    const contentWithAds = useMemo(() => {
+        if (!chapterData?.content) return [];
+        const allLines = chapterData.content.split('\n');
+        const paragraphs = allLines.filter((p: string) => p.trim().length > 0);
+        let paragraphCount = 0;
+        const result: React.ReactNode[] = [];
+
+        allLines.forEach((paragraph: string, index: number) => {
+            const isParagraph = paragraph.trim().length > 0;
+            if (isParagraph) paragraphCount++;
+
+            result.push(
+                <React.Fragment key={index}>
+                    {isParagraph ? (
+                        <p className="mb-4 text-justify">
+                            {paragraph}
+                        </p>
+                    ) : (
+                        <br key={`br-${index}`} />
+                    )}
+                    {/* Insert inline ad every 5 paragraphs */}
+                    {isParagraph &&
+                        paragraphCount > 0 &&
+                        paragraphCount % 5 === 0 &&
+                        paragraphCount < paragraphs.length && (
+                            <div key={`ad-${index}`} className="my-8">
+                                <AdBanner position={AdPosition.INLINE} />
+                            </div>
+                        )}
+                </React.Fragment>
+            );
+        });
+
+        return result;
+    }, [chapterData?.content]);
 
     // Extract chapters array from response
     // useChapters hook already handles the response format, so chaptersResponse should be an array
@@ -582,9 +625,13 @@ export default function ChapterReadingPage() {
             <Sidebar />
             <div className="md:ml-[120px] pb-16 md:pb-0">
                 <Header />
+
+                {/* Top Banner Ad */}
+                <AdBanner position={AdPosition.TOP} />
+
                 <main className="pt-4 md:pt-8 pb-12 min-h-[calc(100vh-60px)]">
                     {/* Story Header */}
-                    <div className="max-w-4xl mx-auto px-4 md:px-6 mb-6">
+                    <div className="w-full px-4 md:px-6 lg:pr-[300px] mb-6">
                         <button
                             onClick={handleBack}
                             className="text-blue-500 hover:text-blue-600 dark:text-blue-400 mb-2 inline-block text-left"
@@ -604,7 +651,7 @@ export default function ChapterReadingPage() {
                     </div>
 
                     {/* Reading Controls */}
-                    <div className="max-w-4xl mx-auto px-4 md:px-6 mb-4">
+                    <div className="w-full px-4 md:px-6 lg:pr-[300px] mb-4">
                         <div className="sticky top-0 z-10 flex items-center justify-between bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm border-b border-gray-200 dark:border-gray-700">
                             <div className="flex items-center gap-4 flex-wrap">
                                 <button
@@ -701,245 +748,287 @@ export default function ChapterReadingPage() {
                         </div>
                     </div>
 
-                    <div className="max-w-4xl mx-auto px-4 md:px-6 flex gap-6">
-                        {/* Chapter List Sidebar */}
-                        {showChapterList && (
-                            <div className="hidden md:block w-64 flex-shrink-0">
-                                <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm sticky top-4 max-h-[calc(100vh-200px)] overflow-y-auto chapter-list-scrollbar">
-                                    <h3 className="font-bold text-gray-900 dark:text-white mb-3">
-                                        Danh sách chương
-                                    </h3>
+                    {/* Main Layout: Content full width, Sidebar sticky outside */}
+                    <div className="w-full">
+                        {/* Content Area - Full Width with Sidebar */}
+                        <div className="w-full px-4 md:px-6">
+                            <div className="flex gap-6 items-start">
+                                {/* Chapter List Sidebar - Always visible with sticky */}
+                                {showChapterList && (
+                                    <aside className="hidden md:block w-64 flex-shrink-0 self-start sticky top-[80px]" style={{ position: 'sticky', top: '80px', alignSelf: 'flex-start' }}>
+                                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm max-h-[calc(100vh-100px)] overflow-y-auto chapter-list-scrollbar">
+                                            <h3 className="font-bold text-gray-900 dark:text-white mb-3">
+                                                Danh sách chương
+                                            </h3>
 
-                                    {/* Search Input */}
-                                    <div className="relative mb-3">
-                                        <Search
-                                            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
-                                            size={16}
-                                        />
-                                        <input
-                                            type="text"
-                                            placeholder="Tìm kiếm chương..."
-                                            value={chapterSearchTerm}
-                                            onChange={(e) => setChapterSearchTerm(e.target.value)}
-                                            className="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                        />
-                                    </div>
-
-                                    <div className="space-y-1">
-                                        {filteredChapters.length > 0 ? (
-                                            filteredChapters.map((ch: any, index: number) => {
-                                                // Normalize slugs for comparison (handle URL encoding)
-                                                const normalizeSlug = (slug: string) => {
-                                                    try {
-                                                        return decodeURIComponent(slug).toLowerCase().trim();
-                                                    } catch {
-                                                        return slug.toLowerCase().trim();
-                                                    }
-                                                };
-
-                                                const normalizedChapterSlug = normalizeSlug(chapterSlug);
-                                                const normalizedChSlug = ch.slug ? normalizeSlug(ch.slug) : '';
-                                                const isActive = normalizedChSlug === normalizedChapterSlug;
-
-                                                return (
-                                                    <Link
-                                                        key={ch.id}
-                                                        href={`/stories/${storySlug}/chapters/${ch.slug}`}
-                                                        className={`block px-3 py-2 rounded text-sm transition-colors ${isActive
-                                                            ? 'bg-blue-500 dark:bg-blue-600 text-white font-semibold shadow-sm'
-                                                            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                                                            }`}
-                                                    >
-                                                        {ch.title || `Chương ${ch.order || (index + 1)}`}
-                                                    </Link>
-                                                );
-                                            })
-                                        ) : (
-                                            <div className="px-3 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
-                                                Không tìm thấy chương nào
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Show count if searching */}
-                                    {chapterSearchTerm.trim() && (
-                                        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400 text-center">
-                                            Tìm thấy {filteredChapters.length} / {sortedChapters.length} chương
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Chapter Content */}
-                        <div className="flex-1">
-                            <div
-                                ref={contentRef}
-                                className="bg-white dark:bg-gray-800 rounded-lg p-6 md:p-8 lg:p-12 shadow-sm"
-                                style={{ fontSize: `${fontSize}px`, lineHeight: '2' }}
-                            >
-                                <div
-                                    className="text-gray-900 dark:text-gray-100 whitespace-pre-wrap leading-relaxed"
-                                    style={{
-                                        fontFamily: 'var(--font-quicksand), Quicksand, sans-serif',
-                                        maxWidth: '100%',
-                                    }}
-                                >
-                                    {chapterData.content.split('\n').map((paragraph: string, index: number) => (
-                                        paragraph.trim() ? (
-                                            <p key={index} className="mb-4 text-justify">
-                                                {paragraph}
-                                            </p>
-                                        ) : (
-                                            <br key={index} />
-                                        )
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Bottom Ad */}
-                            {bottomAd && (
-                                <div className="mt-8 bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
-                                    {bottomAd.linkUrl ? (
-                                        <a
-                                            href={bottomAd.linkUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="block w-full"
-                                            onClick={() => {
-                                                if (bottomAd.id) {
-                                                    trackAdClick.mutate(bottomAd.id);
-                                                }
-                                            }}
-                                        >
-                                            <div className="relative w-full h-48 md:h-64">
-                                                <OptimizedImage
-                                                    src={bottomAd.imageUrl}
-                                                    alt={bottomAd.title || 'Quảng cáo'}
-                                                    fill
-                                                    objectFit="contain"
-                                                    sizes={ImageSizes.adBanner}
-                                                    quality={85}
-                                                    placeholder="blur"
-                                                    unoptimized={shouldUnoptimizeImage(bottomAd.imageUrl)}
-                                                    onLoad={() => {
-                                                        // Track ad view when image loads
-                                                        if (bottomAd.id) {
-                                                            trackAdView.mutate(bottomAd.id);
-                                                        }
-                                                    }}
+                                            {/* Search Input */}
+                                            <div className="relative mb-3">
+                                                <Search
+                                                    className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
+                                                    size={16}
+                                                />
+                                                <input
+                                                    type="text"
+                                                    placeholder="Tìm kiếm chương..."
+                                                    value={chapterSearchTerm}
+                                                    onChange={(e) => setChapterSearchTerm(e.target.value)}
+                                                    className="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                                 />
                                             </div>
-                                        </a>
-                                    ) : (
-                                        <div className="relative w-full h-48 md:h-64">
-                                            <OptimizedImage
-                                                src={bottomAd.imageUrl}
-                                                alt={bottomAd.title || 'Quảng cáo'}
-                                                fill
-                                                objectFit="contain"
-                                                sizes={ImageSizes.adBanner}
-                                                quality={85}
-                                                placeholder="blur"
-                                                unoptimized={shouldUnoptimizeImage(bottomAd.imageUrl)}
-                                                onLoad={() => {
-                                                    // Track ad view when image loads
-                                                    if (bottomAd.id) {
-                                                        trackAdView.mutate(bottomAd.id);
-                                                    }
-                                                }}
-                                            />
-                                        </div>
-                                    )}
-                                </div>
-                            )}
 
-                            {/* Navigation */}
-                            <div className="mt-8 flex items-center justify-between gap-4">
-                                <div className="flex-1">
-                                    {prevChapter ? (
-                                        <Link
-                                            href={shouldRedirectToAdRef.current && pendingAdRef.current
-                                                ? `/ads/${pendingAdRef.current.id}?return=/stories/${storySlug}/chapters/${prevChapter.slug}&story=${storySlug}&prev=${prevChapter.slug}${nextChapter ? `&next=${nextChapter.slug}` : ''}`
-                                                : `/stories/${storySlug}/chapters/${prevChapter.slug}`}
-                                            className="group block p-5 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl shadow-md hover:shadow-lg border border-blue-100 dark:border-blue-800/50 transition-all duration-300 hover:scale-[1.02]"
-                                            onClick={() => {
-                                                // Reset redirect flag after clicking
-                                                shouldRedirectToAdRef.current = false;
-                                                pendingAdRef.current = null;
+                                            <div className="space-y-1">
+                                                {filteredChapters.length > 0 ? (
+                                                    filteredChapters.map((ch: any, index: number) => {
+                                                        // Normalize slugs for comparison (handle URL encoding)
+                                                        const normalizeSlug = (slug: string) => {
+                                                            try {
+                                                                return decodeURIComponent(slug).toLowerCase().trim();
+                                                            } catch {
+                                                                return slug.toLowerCase().trim();
+                                                            }
+                                                        };
+
+                                                        const normalizedChapterSlug = normalizeSlug(chapterSlug);
+                                                        const normalizedChSlug = ch.slug ? normalizeSlug(ch.slug) : '';
+                                                        const isActive = normalizedChSlug === normalizedChapterSlug;
+
+                                                        return (
+                                                            <Link
+                                                                key={ch.id}
+                                                                href={`/stories/${storySlug}/chapters/${ch.slug}`}
+                                                                className={`block px-3 py-2 rounded text-sm transition-colors ${isActive
+                                                                    ? 'bg-blue-500 dark:bg-blue-600 text-white font-semibold shadow-sm'
+                                                                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                                                    }`}
+                                                            >
+                                                                {ch.title || `Chương ${ch.order || (index + 1)}`}
+                                                            </Link>
+                                                        );
+                                                    })
+                                                ) : (
+                                                    <div className="px-3 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                                                        Không tìm thấy chương nào
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Show count if searching */}
+                                            {chapterSearchTerm.trim() && (
+                                                <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400 text-center">
+                                                    Tìm thấy {filteredChapters.length} / {sortedChapters.length} chương
+                                                </div>
+                                            )}
+                                        </div>
+                                    </aside>
+                                )}
+
+                                {/* Chapter Content - Full Width */}
+                                <div className="flex-1 min-w-0">
+                                    <div
+                                        ref={contentRef}
+                                        className="bg-white dark:bg-gray-800 rounded-lg p-6 md:p-8 lg:p-12 shadow-sm"
+                                        style={{ fontSize: `${fontSize}px`, lineHeight: '2' }}
+                                    >
+                                        <div
+                                            className="text-gray-900 dark:text-gray-100 whitespace-pre-wrap leading-relaxed"
+                                            style={{
+                                                fontFamily: 'var(--font-quicksand), Quicksand, sans-serif',
+                                                maxWidth: '100%',
                                             }}
                                         >
-                                            <div className="flex items-center gap-3">
-                                                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-blue-500 dark:bg-blue-600 flex items-center justify-center text-white group-hover:bg-blue-600 dark:group-hover:bg-blue-700 transition-colors">
-                                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                                        <path d="M15 18l-6-6 6-6" />
-                                                    </svg>
-                                                </div>
-                                                <div className="text-sm font-semibold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                                                    Trước
-                                                </div>
-                                            </div>
-                                        </Link>
-                                    ) : (
-                                        <div className="p-5 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800">
-                                            <div className="flex items-center gap-3">
-                                                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-600">
-                                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                                        <path d="M15 18l-6-6 6-6" />
-                                                    </svg>
-                                                </div>
-                                                <div className="text-sm text-gray-400 dark:text-gray-600">Trước</div>
-                                            </div>
+                                            {contentWithAds}
                                         </div>
-                                    )}
+                                    </div>
                                 </div>
 
-                                <div className="flex-1">
-                                    {nextChapter ? (
-                                        <Link
-                                            href={shouldRedirectToAdRef.current && pendingAdRef.current
-                                                ? `/ads/${pendingAdRef.current.id}?return=/stories/${storySlug}/chapters/${nextChapter.slug}&story=${storySlug}&next=${nextChapter.slug}${prevChapter ? `&prev=${prevChapter.slug}` : ''}`
-                                                : `/stories/${storySlug}/chapters/${nextChapter.slug}`}
-                                            className="group block p-5 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-xl shadow-md hover:shadow-lg border border-indigo-100 dark:border-indigo-800/50 transition-all duration-300 hover:scale-[1.02] text-right"
-                                            onClick={() => {
-                                                // Reset redirect flag after clicking
-                                                shouldRedirectToAdRef.current = false;
-                                                pendingAdRef.current = null;
-                                            }}
-                                        >
-                                            <div className="flex items-center gap-3 flex-row-reverse">
-                                                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-indigo-500 dark:bg-indigo-600 flex items-center justify-center text-white group-hover:bg-indigo-600 dark:group-hover:bg-indigo-700 transition-colors">
-                                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                                        <path d="M9 18l6-6-6-6" />
-                                                    </svg>
-                                                </div>
-                                                <div className="text-sm font-semibold text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                                                    Sau
-                                                </div>
-                                            </div>
-                                        </Link>
-                                    ) : (
-                                        <div className="p-5 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 text-right">
-                                            <div className="flex items-center gap-3 flex-row-reverse">
-                                                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-600">
-                                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                                        <path d="M9 18l6-6-6-6" />
-                                                    </svg>
-                                                </div>
-                                                <div className="text-sm text-gray-400 dark:text-gray-600">Sau</div>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
+                                {/* Sidebar Ads - Sticky positioned on the right */}
+                                <AdSidebar />
                             </div>
                         </div>
+                    </div>
 
+                    {/* Bottom Banner Ad */}
+                    <div className="w-full px-4 md:px-6 mt-8 mb-8">
+                        <AdBanner position={AdPosition.BOTTOM} />
+                    </div>
+
+                    {/* Navigation */}
+                    <div className="w-full px-4 md:px-6  mt-8 mb-8">
+                        <div className="flex items-center justify-between gap-4">
+                            <div className="flex-1">
+                                {prevChapter ? (
+                                    <Link
+                                        href={shouldRedirectToAdRef.current && pendingAdRef.current
+                                            ? `/ads/${pendingAdRef.current.id}?return=/stories/${storySlug}/chapters/${prevChapter.slug}&story=${storySlug}&prev=${prevChapter.slug}${nextChapter ? `&next=${nextChapter.slug}` : ''}`
+                                            : `/stories/${storySlug}/chapters/${prevChapter.slug}`}
+                                        className="group block p-5 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl shadow-md hover:shadow-lg border border-blue-100 dark:border-blue-800/50 transition-all duration-300 hover:scale-[1.02]"
+                                        onClick={() => {
+                                            // Reset redirect flag after clicking
+                                            shouldRedirectToAdRef.current = false;
+                                            pendingAdRef.current = null;
+                                        }}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-blue-500 dark:bg-blue-600 flex items-center justify-center text-white group-hover:bg-blue-600 dark:group-hover:bg-blue-700 transition-colors">
+                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M15 18l-6-6 6-6" />
+                                                </svg>
+                                            </div>
+                                            <div className="text-sm font-semibold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                                                Trước
+                                            </div>
+                                        </div>
+                                    </Link>
+                                ) : (
+                                    <div className="p-5 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800">
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-600">
+                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M15 18l-6-6 6-6" />
+                                                </svg>
+                                            </div>
+                                            <div className="text-sm text-gray-400 dark:text-gray-600">Trước</div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="flex-1">
+                                {nextChapter ? (
+                                    <Link
+                                        href={shouldRedirectToAdRef.current && pendingAdRef.current
+                                            ? `/ads/${pendingAdRef.current.id}?return=/stories/${storySlug}/chapters/${nextChapter.slug}&story=${storySlug}&next=${nextChapter.slug}${prevChapter ? `&prev=${prevChapter.slug}` : ''}`
+                                            : `/stories/${storySlug}/chapters/${nextChapter.slug}`}
+                                        className="group block p-5 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-xl shadow-md hover:shadow-lg border border-indigo-100 dark:border-indigo-800/50 transition-all duration-300 hover:scale-[1.02] text-right"
+                                        onClick={() => {
+                                            // Reset redirect flag after clicking
+                                            shouldRedirectToAdRef.current = false;
+                                            pendingAdRef.current = null;
+                                        }}
+                                    >
+                                        <div className="flex items-center gap-3 flex-row-reverse">
+                                            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-indigo-500 dark:bg-indigo-600 flex items-center justify-center text-white group-hover:bg-indigo-600 dark:group-hover:bg-indigo-700 transition-colors">
+                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M9 18l6-6-6-6" />
+                                                </svg>
+                                            </div>
+                                            <div className="text-sm font-semibold text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                                                Sau
+                                            </div>
+                                        </div>
+                                    </Link>
+                                ) : (
+                                    <div className="p-5 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 text-right">
+                                        <div className="flex items-center gap-3 flex-row-reverse">
+                                            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-600">
+                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M9 18l6-6-6-6" />
+                                                </svg>
+                                            </div>
+                                            <div className="text-sm text-gray-400 dark:text-gray-600">Sau</div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     </div>
                 </main>
                 <Footer />
             </div>
 
+            {/* Floating Action Button with Menu */}
+            <div ref={floatingMenuRef} className="fixed bottom-6 right-6 z-50">
+                {/* Menu Options */}
+                {showFloatingMenu && (
+                    <div className="absolute bottom-16 right-0 mb-2 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-2 min-w-[200px] animate-in fade-in slide-in-from-bottom-2 duration-200">
+                        {/* Font Size Controls */}
+                        <div className="mb-2 pb-2 border-b border-gray-200 dark:border-gray-700">
+                            <div className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300">
+                                <Type size={16} />
+                                <span className="font-medium">Kích cỡ chữ</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-2 px-3 py-2">
+                                <button
+                                    onClick={() => setFontSize(Math.max(12, fontSize - 2))}
+                                    className="w-8 h-8 flex items-center justify-center bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded text-gray-700 dark:text-gray-300 transition-colors"
+                                    aria-label="Giảm kích cỡ chữ"
+                                >
+                                    -
+                                </button>
+                                <span className="text-sm text-gray-600 dark:text-gray-400 min-w-[50px] text-center font-medium">
+                                    {fontSize}px
+                                </span>
+                                <button
+                                    onClick={() => setFontSize(Math.min(24, fontSize + 2))}
+                                    className="w-8 h-8 flex items-center justify-center bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded text-gray-700 dark:text-gray-300 font-bold transition-colors"
+                                    aria-label="Tăng kích cỡ chữ"
+                                >
+                                    +
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Chapter Navigation */}
+                        <div className="space-y-1">
+                            {prevChapter ? (
+                                <Link
+                                    href={shouldRedirectToAdRef.current && pendingAdRef.current
+                                        ? `/ads/${pendingAdRef.current.id}?return=/stories/${storySlug}/chapters/${prevChapter.slug}&story=${storySlug}&prev=${prevChapter.slug}${nextChapter ? `&next=${nextChapter.slug}` : ''}`
+                                        : `/stories/${storySlug}/chapters/${prevChapter.slug}`}
+                                    onClick={() => {
+                                        setShowFloatingMenu(false);
+                                        shouldRedirectToAdRef.current = false;
+                                        pendingAdRef.current = null;
+                                    }}
+                                    className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                >
+                                    <ChevronLeft size={18} />
+                                    <span>Chương trước</span>
+                                </Link>
+                            ) : (
+                                <div className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-400 dark:text-gray-600 cursor-not-allowed">
+                                    <ChevronLeft size={18} />
+                                    <span>Chương trước</span>
+                                </div>
+                            )}
+                            {nextChapter ? (
+                                <Link
+                                    href={shouldRedirectToAdRef.current && pendingAdRef.current
+                                        ? `/ads/${pendingAdRef.current.id}?return=/stories/${storySlug}/chapters/${nextChapter.slug}&story=${storySlug}&next=${nextChapter.slug}${prevChapter ? `&prev=${prevChapter.slug}` : ''}`
+                                        : `/stories/${storySlug}/chapters/${nextChapter.slug}`}
+                                    onClick={() => {
+                                        setShowFloatingMenu(false);
+                                        shouldRedirectToAdRef.current = false;
+                                        pendingAdRef.current = null;
+                                    }}
+                                    className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                >
+                                    <ChevronRight size={18} />
+                                    <span>Chương sau</span>
+                                </Link>
+                            ) : (
+                                <div className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-400 dark:text-gray-600 cursor-not-allowed">
+                                    <ChevronRight size={18} />
+                                    <span>Chương sau</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* FAB Button */}
+                <button
+                    onClick={() => setShowFloatingMenu(!showFloatingMenu)}
+                    className="w-14 h-14 flex items-center justify-center bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 dark:from-blue-600 dark:to-indigo-600 dark:hover:from-blue-700 dark:hover:to-indigo-700 rounded-full shadow-lg hover:shadow-xl text-white transition-all duration-200 hover:scale-110 active:scale-95"
+                    aria-label={showFloatingMenu ? 'Đóng menu' : 'Mở menu'}
+                >
+                    {showFloatingMenu ? (
+                        <X size={24} className="transition-transform duration-200" />
+                    ) : (
+                        <Menu size={24} className="transition-transform duration-200" />
+                    )}
+                </button>
+            </div>
         </div>
     );
 }
-

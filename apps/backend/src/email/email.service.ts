@@ -79,7 +79,7 @@ export class EmailService {
         const verificationUrl = `${frontendUrl}/auth/verify-email?token=${token}`;
 
         const html = this.getVerificationEmailTemplate(userName, verificationUrl);
-        const text = `Xin chào ${userName}!\n\nCảm ơn bạn đã đăng ký tài khoản tại Web Truyện Tiến Hùng.\n\nĐể kích hoạt tài khoản của bạn, vui lòng truy cập link sau:\n${verificationUrl}\n\nLink này sẽ hết hạn sau 24 giờ.\n\nTrân trọng,\nĐội ngũ Web Truyện Tiến Hùng`;
+        const text = `Xin chào ${userName}!\n\nCảm ơn bạn đã đăng ký tài khoản tại Web Truyện HungYeu.\n\nĐể kích hoạt tài khoản của bạn, vui lòng truy cập link sau:\n${verificationUrl}\n\nLink này sẽ hết hạn sau 24 giờ.\n\nTrân trọng,\nĐội ngũ Web Truyện HungYeu`;
 
         await this.sendEmail({
             to: email,
@@ -96,7 +96,7 @@ export class EmailService {
         const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
 
         const html = this.getWelcomeEmailTemplate(userName, frontendUrl);
-        const text = `Xin chào ${userName}!\n\nChào mừng bạn đã tham gia cộng đồng đọc truyện của chúng tôi!\n\nBạn có thể bắt đầu khám phá hàng ngàn câu chuyện hấp dẫn tại: ${frontendUrl}\n\nTrân trọng,\nĐội ngũ Web Truyện Tiến Hùng`;
+        const text = `Xin chào ${userName}!\n\nChào mừng bạn đã tham gia cộng đồng đọc truyện của chúng tôi!\n\nBạn có thể bắt đầu khám phá hàng ngàn câu chuyện hấp dẫn tại: ${frontendUrl}\n\nTrân trọng,\nĐội ngũ Web Truyện HungYeu`;
 
         await this.sendEmail({
             to: email,
@@ -120,7 +120,7 @@ export class EmailService {
         const storyUrl = `${frontendUrl}/truyen/${storySlug}`;
 
         const html = this.getApprovalApprovedTemplate(userName, storyTitle, storyUrl, adminNote);
-        const text = `Xin chào ${userName}!\n\nTruyện "${storyTitle}" của bạn đã được phê duyệt và xuất bản thành công!\n\nXem truyện tại: ${storyUrl}\n\n${adminNote ? `Ghi chú từ Admin: ${adminNote}\n\n` : ''}Trân trọng,\nĐội ngũ Web Truyện Tiến Hùng`;
+        const text = `Xin chào ${userName}!\n\nTruyện "${storyTitle}" của bạn đã được phê duyệt và xuất bản thành công!\n\nXem truyện tại: ${storyUrl}\n\n${adminNote ? `Ghi chú từ Admin: ${adminNote}\n\n` : ''}Trân trọng,\nĐội ngũ Web Truyện HungYeu`;
 
         await this.sendEmail({
             to: email,
@@ -140,7 +140,7 @@ export class EmailService {
         reason?: string
     ): Promise<void> {
         const html = this.getApprovalRejectedTemplate(userName, storyTitle, reason);
-        const text = `Xin chào ${userName}!\n\nRất tiếc, truyện "${storyTitle}" của bạn chưa được phê duyệt.\n\n${reason ? `Lý do: ${reason}\n\n` : ''}Bạn có thể chỉnh sửa và gửi lại yêu cầu phê duyệt.\n\nTrân trọng,\nĐội ngũ Web Truyện Tiến Hùng`;
+        const text = `Xin chào ${userName}!\n\nRất tiếc, truyện "${storyTitle}" của bạn chưa được phê duyệt.\n\n${reason ? `Lý do: ${reason}\n\n` : ''}Bạn có thể chỉnh sửa và gửi lại yêu cầu phê duyệt.\n\nTrân trọng,\nĐội ngũ Web Truyện HungYeu`;
 
         await this.sendEmail({
             to: email,
@@ -151,12 +151,134 @@ export class EmailService {
     }
 
     /**
+     * Send system notification email
+     */
+    async sendSystemNotification(
+        email: string,
+        userName: string,
+        title: string,
+        content: string,
+        type: string,
+        priority: string,
+    ): Promise<void> {
+        const html = this.getSystemNotificationTemplate(userName, title, content, type, priority);
+
+        await this.sendEmail({
+            to: email,
+            subject: `[${this.getPriorityLabel(priority)}] ${title}`,
+            html,
+        });
+    }
+
+    private getPriorityLabel(priority: string): string {
+        const labels: Record<string, string> = {
+            LOW: 'Thông tin',
+            NORMAL: 'Thông báo',
+            HIGH: 'Quan trọng',
+            URGENT: 'Khẩn cấp',
+        };
+        return labels[priority] || 'Thông báo';
+    }
+
+    private getTypeLabel(type: string): string {
+        const labels: Record<string, string> = {
+            SYSTEM_UPDATE: 'Cập nhật hệ thống',
+            MAINTENANCE: 'Bảo trì',
+            NEW_FEATURE: 'Tính năng mới',
+            ANNOUNCEMENT: 'Thông báo',
+            WARNING: 'Cảnh báo',
+            INFO: 'Thông tin',
+        };
+        return labels[type] || 'Thông báo';
+    }
+
+    private getSystemNotificationTemplate(
+        userName: string,
+        title: string,
+        content: string,
+        type: string,
+        priority: string,
+    ): string {
+        const priorityColors: Record<string, { bg: string; text: string }> = {
+            LOW: { bg: '#10b981', text: '#059669' },
+            NORMAL: { bg: '#3b82f6', text: '#2563eb' },
+            HIGH: { bg: '#f59e0b', text: '#d97706' },
+            URGENT: { bg: '#ef4444', text: '#dc2626' },
+        };
+
+        const color = priorityColors[priority] || priorityColors.NORMAL;
+        const typeLabel = this.getTypeLabel(type);
+
+        return `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${title}</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f3f4f6; line-height: 1.6;">
+    <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #f3f4f6;">
+        <tr>
+            <td style="padding: 40px 20px;">
+                <table role="presentation" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+                    <!-- Header -->
+                    <tr>
+                        <td style="padding: 40px; text-align: center; background: linear-gradient(135deg, ${color.bg} 0%, ${color.text} 100%);">
+                            <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 600; letter-spacing: -0.5px;">
+                                ${title}
+                            </h1>
+                            <p style="margin: 8px 0 0 0; color: rgba(255, 255, 255, 0.9); font-size: 14px;">
+                                ${typeLabel}
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Content -->
+                    <tr>
+                        <td style="padding: 40px;">
+                            <p style="margin: 0 0 16px 0; color: #374151; font-size: 16px;">
+                                Xin chào <strong>${userName}</strong>,
+                            </p>
+                            
+                            <div style="margin: 24px 0; padding: 20px; background-color: #f9fafb; border-left: 4px solid ${color.bg}; border-radius: 4px;">
+                                <p style="margin: 0; color: #1f2937; font-size: 15px; white-space: pre-wrap;">${content}</p>
+                            </div>
+
+                            <p style="margin: 24px 0 0 0; color: #6b7280; font-size: 14px;">
+                                Trân trọng,<br>
+                                <strong style="color: #1f2937;">Đội ngũ Web Truyện HungYeu</strong>
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="padding: 30px 40px; background-color: #f9fafb; border-top: 1px solid #e5e7eb;">
+                            <p style="margin: 0; color: #6b7280; font-size: 13px; text-align: center;">
+                                Email này được gửi tự động, vui lòng không trả lời.
+                            </p>
+                            <p style="margin: 8px 0 0 0; color: #9ca3af; font-size: 12px; text-align: center;">
+                                © ${new Date().getFullYear()} Web Truyện HungYeu. All rights reserved.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
+        `.trim();
+    }
+
+    /**
      * Send email (uses nodemailer if configured, otherwise logs to console)
      */
     private async sendEmail(options: EmailOptions): Promise<void> {
         const emailFrom = this.configService.get<string>('EMAIL_FROM') ||
             this.configService.get<string>('EMAIL_USER') ||
-            'noreply@webtruyen.com';
+            'noreply@hungyeu.com';
 
         // If transporter is configured, send real email
         if (this.transporter) {
@@ -281,7 +403,7 @@ Verification URL: ${this.extractUrl(options.text || options.html)}
                                 Email này được gửi tự động, vui lòng không trả lời.
                             </p>
                             <p style="margin: 0; color: #bdbdbd; font-size: 12px;">
-                                © 2026 Web Truyện Tiến Hùng. All rights reserved.
+                                © 2026 Web Truyện HungYeu. All rights reserved.
                             </p>
                         </td>
                     </tr>
@@ -417,7 +539,7 @@ Verification URL: ${this.extractUrl(options.text || options.html)}
                                 Email này được gửi tự động, vui lòng không trả lời.
                             </p>
                             <p style="margin: 0; color: #bdbdbd; font-size: 12px;">
-                                © 2026 Web Truyện Tiến Hùng. All rights reserved.
+                                © 2026 Web Truyện HungYeu. All rights reserved.
                             </p>
                         </td>
                     </tr>
