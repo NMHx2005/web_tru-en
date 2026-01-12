@@ -31,17 +31,17 @@ export class AuthService {
   async register(registerDto: RegisterDto): Promise<{
     success: boolean;
     message: string;
-    requiresVerification: boolean;
-    email: string;
+    requiresVerification?: boolean;
+    email?: string;
+    accessToken?: string;
+    refreshToken?: string;
+    user?: any;
   }> {
     const { email, username, password, confirmPassword, displayName } = registerDto;
 
-    // Check if registration is allowed
+    // Get settings to check email verification requirement
     const settings = await this.prisma.settings.findFirst();
-    if (settings && !settings.allowRegistration) {
-      this.logger.warn(`Registration attempt blocked - registration disabled`);
-      throw new BadRequestException('Đăng ký tài khoản mới hiện đang bị tắt. Vui lòng liên hệ quản trị viên.');
-    }
+    const requireEmailVerification = settings?.requireEmailVerification ?? false;
 
     // Validate password confirmation
     if (password !== confirmPassword) {
@@ -68,7 +68,10 @@ export class AuthService {
     // Generate avatar placeholder if not provided (for local registration)
     const avatarPlaceholder = this.generateAvatarPlaceholder(username, displayName || username);
 
-    // 🔥 NEW: Create user with isActive = FALSE (requires email verification)
+    // 🔥 NEW: Check if email verification is required
+    const emailVerified = !requireEmailVerification; // If not required, set to true
+    const isActive = !requireEmailVerification; // If not required, set to true
+
     const user = await this.prisma.user.create({
       data: {
         email,
@@ -77,8 +80,8 @@ export class AuthService {
         displayName: displayName || username,
         avatar: avatarPlaceholder,
         provider: 'local',
-        emailVerified: false, // Requires email verification
-        isActive: false, // 🔥 CHANGED: Account is NOT active until email verified
+        emailVerified,
+        isActive,
         role: 'USER',
       } as Prisma.UserUncheckedCreateInput,
       select: {
@@ -86,21 +89,51 @@ export class AuthService {
         email: true,
         username: true,
         displayName: true,
+        avatar: true,
+        role: true,
       },
     });
 
-    this.logger.log(`User registered: ${user.email} (${user.id}) - Pending email verification`);
+    if (requireEmailVerification) {
+      // 🔥 Email verification required: Send email and return verification message
+      this.logger.log(`User registered: ${user.email} (${user.id}) - Pending email verification`);
+      await this.sendEmailVerification(user.id, user.email, user.displayName || user.username);
 
-    // 🔥 NEW: Send email verification (always required)
-    await this.sendEmailVerification(user.id, user.email, user.displayName || user.username);
+      return {
+        success: true,
+        message: 'Đăng ký thành công! Vui lòng kiểm tra email để xác thực tài khoản.',
+        requiresVerification: true,
+        email: user.email,
+      };
+    } else {
+      // 🔥 Email verification NOT required: Auto-login user
+      this.logger.log(`User registered: ${user.email} (${user.id}) - Auto-activated (no email verification required)`);
 
-    // 🔥 CHANGED: Don't return tokens, return success message
-    return {
-      success: true,
-      message: 'Đăng ký thành công! Vui lòng kiểm tra email để xác thực tài khoản.',
-      requiresVerification: true,
-      email: user.email,
-    };
+      // Generate tokens for immediate login
+      const tokens = await this.generateTokens(
+        {
+          id: user.id,
+          email: user.email,
+          username: user.username,
+          role: user.role,
+        },
+        false // Don't remember by default
+      );
+
+      return {
+        success: true,
+        message: 'Đăng ký thành công!',
+        ...tokens,
+        user: {
+          id: user.id,
+          email: user.email,
+          username: user.username,
+          displayName: user.displayName || user.username,
+          avatar: user.avatar || this.generateAvatarPlaceholder(user.username, user.displayName || user.username),
+          role: user.role,
+        },
+      };
+    }
   }
 
   async login(loginDto: LoginDto): Promise<TokenResponseDto> {
@@ -176,8 +209,11 @@ export class AuthService {
       return null;
     }
 
-    // 🔥 NEW: Check if email is verified
-    if (!user.emailVerified) {
+    // 🔥 NEW: Check if email is verified (only if email verification is required)
+    const settings = await this.prisma.settings.findFirst();
+    const requireEmailVerification = settings?.requireEmailVerification ?? false;
+
+    if (requireEmailVerification && !user.emailVerified) {
       throw new UnauthorizedException(
         'Tài khoản chưa được xác thực. Vui lòng kiểm tra email để xác thực tài khoản.'
       );
@@ -210,6 +246,10 @@ export class AuthService {
     accessToken?: string;
     needsEmail?: boolean;
   }): Promise<{ user: any; needsVerification?: boolean; email?: string }> {
+    // Get settings to check email verification requirement
+    const settings = await this.prisma.settings.findFirst();
+    const requireEmailVerification = settings?.requireEmailVerification ?? false;
+
     // 🔥 STEP 1: Find existing user by provider and providerId
     let user = await this.prisma.user.findFirst({
       where: {
@@ -221,9 +261,13 @@ export class AuthService {
     if (user) {
       // 🔥 CASE 1: User đã tồn tại với provider này
 
-      // Check if user is active and verified
-      if (user.isActive && user.emailVerified) {
-        // ✅ User đã active và verified → Cho đăng nhập ngay
+      // Check if user can login (based on email verification requirement)
+      const canLogin = requireEmailVerification
+        ? (user.isActive && user.emailVerified)
+        : user.isActive;
+
+      if (canLogin) {
+        // ✅ User có thể đăng nhập → Cho đăng nhập ngay
         this.logger.log(`OAuth user logged in: ${user.email} (${user.id}) - Active`);
 
         // Update avatar/displayName if needed
@@ -245,14 +289,24 @@ export class AuthService {
         const { password: _, ...result } = user;
         return { user: result };
       } else {
-        // ⚠️ User chưa active hoặc chưa verify → Gửi lại email verification
-        this.logger.warn(`OAuth user not verified: ${user.email} (${user.id}) - Resending verification`);
-
-        // Resend verification email
-        await this.sendEmailVerification(user.id, user.email, user.displayName || user.username);
+        // ⚠️ User chưa active hoặc chưa verify → Gửi lại email verification (nếu required)
+        if (requireEmailVerification) {
+          this.logger.warn(`OAuth user not verified: ${user.email} (${user.id}) - Resending verification`);
+          await this.sendEmailVerification(user.id, user.email, user.displayName || user.username);
+        } else {
+          // If email verification not required, activate account
+          user = await this.prisma.user.update({
+            where: { id: user.id },
+            data: {
+              isActive: true,
+              emailVerified: true,
+            },
+          });
+          this.logger.log(`OAuth user activated: ${user.email} (${user.id}) - No verification required`);
+        }
 
         const { password: _, ...result } = user;
-        return { user: result, needsVerification: true, email: user.email };
+        return { user: result, needsVerification: requireEmailVerification, email: user.email };
       }
     } else {
       // 🔥 STEP 2: Check if email exists (link account)
@@ -263,8 +317,12 @@ export class AuthService {
       if (existingUser) {
         // 🔥 CASE 2: Email đã tồn tại nhưng chưa link với OAuth này
 
-        if (existingUser.isActive && existingUser.emailVerified) {
-          // ✅ User đã active → Link OAuth account
+        const canLogin = requireEmailVerification
+          ? (existingUser.isActive && existingUser.emailVerified)
+          : existingUser.isActive;
+
+        if (canLogin) {
+          // ✅ User có thể đăng nhập → Link OAuth account
           user = await this.prisma.user.update({
             where: { id: existingUser.id },
             data: {
@@ -279,28 +337,36 @@ export class AuthService {
           const { password: _, ...result } = user;
           return { user: result };
         } else {
-          // ⚠️ User tồn tại nhưng chưa active → Gửi lại email
-          this.logger.warn(`Existing user not verified: ${existingUser.email} - Resending verification`);
+          // ⚠️ User tồn tại nhưng chưa active → Gửi lại email (nếu required) hoặc activate
+          this.logger.warn(`Existing user not verified: ${existingUser.email} - ${requireEmailVerification ? 'Resending verification' : 'Activating'}`);
 
           // Link OAuth data
+          const updateData: any = {
+            provider: oauthUser.provider,
+            providerId: oauthUser.providerId,
+            avatar: oauthUser.avatar || existingUser.avatar,
+            displayName: oauthUser.displayName || existingUser.displayName,
+          };
+
+          if (!requireEmailVerification) {
+            updateData.isActive = true;
+            updateData.emailVerified = true;
+          }
+
           user = await this.prisma.user.update({
             where: { id: existingUser.id },
-            data: {
-              provider: oauthUser.provider,
-              providerId: oauthUser.providerId,
-              avatar: oauthUser.avatar || existingUser.avatar,
-              displayName: oauthUser.displayName || existingUser.displayName,
-            } as Prisma.UserUncheckedUpdateInput,
+            data: updateData as Prisma.UserUncheckedUpdateInput,
           });
 
-          // Resend verification
-          await this.sendEmailVerification(user.id, user.email, user.displayName || user.username);
+          if (requireEmailVerification) {
+            await this.sendEmailVerification(user.id, user.email, user.displayName || user.username);
+          }
 
           const { password: _, ...result } = user;
-          return { user: result, needsVerification: true, email: user.email };
+          return { user: result, needsVerification: requireEmailVerification, email: user.email };
         }
       } else {
-        // 🔥 CASE 3: User hoàn toàn mới → Tạo mới và gửi email verification
+        // 🔥 CASE 3: User hoàn toàn mới → Tạo mới
         let username = oauthUser.username;
         if (!username) {
           if (oauthUser.email.includes('@facebook.placeholder')) {
@@ -314,7 +380,11 @@ export class AuthService {
 
         const avatar = oauthUser.avatar || this.generateAvatarPlaceholder(username, oauthUser.displayName || username);
 
-        // Create new user with isActive = false
+        // 🔥 NEW: Set emailVerified and isActive based on requireEmailVerification
+        const emailVerified = !requireEmailVerification;
+        const isActive = !requireEmailVerification;
+
+        // Create new user
         user = await this.prisma.user.create({
           data: {
             email: oauthUser.email,
@@ -323,20 +393,22 @@ export class AuthService {
             avatar,
             provider: oauthUser.provider,
             providerId: oauthUser.providerId,
-            emailVerified: false,
-            isActive: false,
+            emailVerified,
+            isActive,
             role: 'USER',
             password: null,
           } as unknown as Prisma.UserUncheckedCreateInput,
         });
 
-        this.logger.log(`New OAuth user created: ${user.email} (${user.id}) - Pending verification`);
-
-        // Send verification email
-        await this.sendEmailVerification(user.id, user.email, user.displayName || user.username);
+        if (requireEmailVerification) {
+          this.logger.log(`New OAuth user created: ${user.email} (${user.id}) - Pending verification`);
+          await this.sendEmailVerification(user.id, user.email, user.displayName || user.username);
+        } else {
+          this.logger.log(`New OAuth user created: ${user.email} (${user.id}) - Auto-activated (no verification required)`);
+        }
 
         const { password: _, ...result } = user;
-        return { user: result, needsVerification: true, email: user.email };
+        return { user: result, needsVerification: requireEmailVerification, email: user.email };
       }
     }
   }

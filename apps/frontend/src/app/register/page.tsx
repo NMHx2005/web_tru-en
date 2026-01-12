@@ -40,15 +40,7 @@ export default function RegisterPage() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Check if registration is allowed
-  useEffect(() => {
-    if (!settingsLoading && settings) {
-      if (!settings.allowRegistration) {
-        // Redirect to login page if registration is disabled
-        router.push('/login');
-      }
-    }
-  }, [settings, settingsLoading, router]);
+  // Note: Registration is always allowed now (allowRegistration setting removed)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

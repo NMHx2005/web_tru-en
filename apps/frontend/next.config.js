@@ -2,7 +2,7 @@
 const nextConfig = {
   reactStrictMode: true,
   images: {
-    domains: ['res.cloudinary.com', 'static.truyenfull.vision', 'cache.staticscdn.net', 'iads.staticscdn.net', 'images.unsplash.com', 'lh3.googleusercontent.com', 'gtvseo.com'],
+    domains: ['res.cloudinary.com', 'static.truyenfull.vision', 'cache.staticscdn.net', 'iads.staticscdn.net', 'images.unsplash.com', 'lh3.googleusercontent.com', 'gtvseo.com', 'ui-avatars.com'],
     remotePatterns: [
       {
         protocol: 'https',
@@ -31,6 +31,10 @@ const nextConfig = {
       {
         protocol: 'https',
         hostname: 'gtvseo.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'ui-avatars.com',
       },
     ],
     // Image optimization settings - PRO MAX

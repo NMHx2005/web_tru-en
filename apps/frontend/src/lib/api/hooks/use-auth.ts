@@ -44,15 +44,28 @@ export const useAuth = () => {
     throwOnError: false,
   });
 
-  // 🔥 SIMPLIFIED: Register mutation - redirect to success page
+  // 🔥 Register mutation - handle both verification and auto-login cases
   const registerMutation = useMutation({
     mutationFn: (data: RegisterRequest) => authService.register(data),
     onSuccess: async (response) => {
-      // 🔥 NEW: Redirect to registration success page instead of home
+      // If email verification is required, redirect to success page
       if (response.data?.requiresVerification) {
-        router.replace(`/auth/registration-success?email=${encodeURIComponent(response.data.email)}`);
+        router.replace(`/auth/registration-success?email=${encodeURIComponent(response.data.email || '')}`);
+      } else if (response.data?.accessToken && response.data?.user) {
+        // If no verification required, user is auto-logged in
+        // Wait for cookies to be set by the interceptor
+        await new Promise(resolve => setTimeout(resolve, 800));
+        
+        // Invalidate all queries to force fresh fetch with new auth
+        await queryClient.invalidateQueries();
+        
+        // Wait a bit more to ensure queries start fetching
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        // Redirect to home
+        router.replace('/');
       } else {
-        // Fallback: if no verification required, redirect to home
+        // Fallback: redirect to home
         await queryClient.refetchQueries({ queryKey: ['auth', 'me'] });
         router.replace('/');
       }

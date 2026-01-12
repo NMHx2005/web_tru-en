@@ -31,9 +31,6 @@ export default function AdminSettingsPage() {
         siteTikTok: '',
         siteLinkedIn: '',
         siteThreads: '',
-        maintenanceMode: false,
-        maintenanceMessage: '',
-        allowRegistration: true,
         requireEmailVerification: false,
     });
 
@@ -58,9 +55,6 @@ export default function AdminSettingsPage() {
                 siteTikTok: settings.siteTikTok || '',
                 siteLinkedIn: settings.siteLinkedIn || '',
                 siteThreads: settings.siteThreads || '',
-                maintenanceMode: settings.maintenanceMode || false,
-                maintenanceMessage: settings.maintenanceMessage || '',
-                allowRegistration: settings.allowRegistration ?? true,
                 requireEmailVerification: settings.requireEmailVerification || false,
             });
         }
@@ -399,54 +393,12 @@ export default function AdminSettingsPage() {
                             <div className="flex items-center justify-between">
                                 <div>
                                     <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        Chế độ bảo trì
-                                    </label>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">Tắt website để bảo trì</p>
-                                </div>
-                                <input
-                                    type="checkbox"
-                                    checked={formData.maintenanceMode}
-                                    onChange={(e) => setFormData({ ...formData, maintenanceMode: e.target.checked })}
-                                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                />
-                            </div>
-
-                            {formData.maintenanceMode && (
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        Thông báo bảo trì
-                                    </label>
-                                    <textarea
-                                        value={formData.maintenanceMessage}
-                                        onChange={(e) => setFormData({ ...formData, maintenanceMessage: e.target.value })}
-                                        rows={3}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
-                                        placeholder="Thông báo hiển thị khi website ở chế độ bảo trì"
-                                    />
-                                </div>
-                            )}
-
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        Cho phép đăng ký
-                                    </label>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">Cho phép người dùng mới đăng ký</p>
-                                </div>
-                                <input
-                                    type="checkbox"
-                                    checked={formData.allowRegistration}
-                                    onChange={(e) => setFormData({ ...formData, allowRegistration: e.target.checked })}
-                                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                />
-                            </div>
-
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                                         Yêu cầu xác thực email
                                     </label>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">Yêu cầu người dùng xác thực email</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                        Khi bật: Người dùng phải xác thực email trước khi đăng nhập<br/>
+                                        Khi tắt: Người dùng có thể đăng nhập ngay sau khi đăng ký
+                                    </p>
                                 </div>
                                 <input
                                     type="checkbox"

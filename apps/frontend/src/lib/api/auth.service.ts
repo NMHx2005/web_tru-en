@@ -12,8 +12,18 @@ export interface RegisterRequest {
 export interface RegisterResponse {
   success: boolean;
   message: string;
-  requiresVerification: boolean;
-  email: string;
+  requiresVerification?: boolean;
+  email?: string;
+  accessToken?: string;
+  refreshToken?: string;
+  user?: {
+    id: string;
+    email: string;
+    username: string;
+    displayName?: string;
+    avatar?: string;
+    role: string;
+  };
 }
 
 export interface LoginRequest {
