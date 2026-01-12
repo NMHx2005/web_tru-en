@@ -51,7 +51,7 @@ export default function AdPage() {
     // Separate effect for tracking view (only once per ad)
     useEffect(() => {
         if (!selectedAd?.id || hasTrackedView.current === selectedAd.id) return;
-        
+
         hasTrackedView.current = selectedAd.id;
         // Use setTimeout to avoid calling in render
         const timer = setTimeout(() => {
@@ -110,12 +110,12 @@ export default function AdPage() {
     }
 
     return (
-        <div className="min-h-screen bg-[#FFF2F8] dark:bg-gray-900 transition-colors duration-300">
+        <div className="min-h-screen   transition-colors duration-300">
             <Sidebar />
             <div className="md:ml-[120px] pb-16 md:pb-0">
                 <Header />
-                <main className="pt-4 md:pt-8 pb-12 min-h-[calc(100vh-60px)]">
-                    <div className="max-w-4xl mx-auto px-4 md:px-6">
+                <main className="pt-2 md:pt-8 pb-6 md:pb-12 min-h-[calc(100vh-60px)]">
+                    <div className="max-w-xs sm:max-w-sm md:max-w-2xl lg:max-w-4xl mx-auto px-2 sm:px-3 md:px-4 lg:px-6">
                         {/* Back Button - Return to chapter page */}
                         {(returnUrl || storySlug) && (
                             <div className="mb-6">
@@ -129,15 +129,15 @@ export default function AdPage() {
                         )}
 
                         {/* Ad Content - Full width, no padding */}
-                        <div className="bg-white dark:bg-gray-800 rounded-[15px] shadow-sm overflow-hidden">
-                            {/* Sponsored Label */}
-                            <div className="w-full bg-gray-100 dark:bg-gray-700 px-4 py-2 text-left">
-                                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                        <div className="rounded-lg md:rounded-[15px] shadow-sm overflow-hidden flex flex-col">
+                            {/* Sponsored Label - Separated at top */}
+                            <div className="w-full px-2 sm:px-3 md:px-4 py-2 md:py-3 text-left">
+                                <span className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">
                                     Được tài trợ
                                 </span>
                             </div>
-                            
-                            {/* Ad Image - Full width, no gaps */}
+
+                            {/* Ad Image - Square shape with full image display */}
                             <div className="w-full relative">
                                 {selectedAd.imageUrl ? (
                                     <div className="w-full relative">
@@ -153,12 +153,12 @@ export default function AdPage() {
                                                     }
                                                 }}
                                             >
-                                                <div className="relative w-full h-[70vh] min-h-[500px]">
+                                                <div className="relative w-full aspect-square bg-gray-100 dark:bg-gray-700">
                                                     <OptimizedImage
                                                         src={selectedAd.imageUrl}
                                                         alt={selectedAd.title || 'Quảng cáo'}
                                                         fill
-                                                        objectFit="cover"
+                                                        objectFit="contain"
                                                         sizes={ImageSizes.adFull}
                                                         quality={90}
                                                         placeholder="blur"
@@ -168,12 +168,12 @@ export default function AdPage() {
                                                 </div>
                                             </a>
                                         ) : (
-                                            <div className="relative w-full h-[70vh] min-h-[500px]">
+                                            <div className="relative w-full aspect-square bg-gray-100 dark:bg-gray-700">
                                                 <OptimizedImage
                                                     src={selectedAd.imageUrl}
                                                     alt={selectedAd.title || 'Quảng cáo'}
                                                     fill
-                                                    objectFit="cover"
+                                                    objectFit="contain"
                                                     sizes={ImageSizes.adFull}
                                                     quality={90}
                                                     placeholder="blur"
@@ -182,22 +182,22 @@ export default function AdPage() {
                                                 />
                                             </div>
                                         )}
-                                        
-                                        {/* Continue Button - Overlay at bottom */}
-                                        <div className="absolute bottom-0 left-0 right-0 px-4 pb-4">
-                                            <button
-                                                onClick={handleContinue}
-                                                className="w-full px-6 py-4 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 dark:from-blue-600 dark:to-indigo-600 dark:hover:from-blue-700 dark:hover:to-indigo-700 rounded-lg text-white font-semibold text-lg transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"
-                                            >
-                                                Tiếp tục đọc
-                                            </button>
-                                        </div>
                                     </div>
                                 ) : (
                                     <div className="text-center text-gray-500 dark:text-gray-400 py-20">
                                         <p>Không có hình ảnh quảng cáo</p>
                                     </div>
                                 )}
+                            </div>
+
+                            {/* Continue Button - Moved to bottom, separate section */}
+                            <div className="w-full px-2 sm:px-3 md:px-4 py-2 md:py-3">
+                                <button
+                                    onClick={handleContinue}
+                                    className="w-full px-3 sm:px-4 py-1.5 sm:py-2 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 dark:from-blue-600 dark:to-indigo-600 dark:hover:from-blue-700 dark:hover:to-indigo-700 rounded-md text-white font-medium text-xs sm:text-sm transition-all duration-200 shadow hover:shadow-md"
+                                >
+                                    Tiếp tục đọc
+                                </button>
                             </div>
                         </div>
                     </div>

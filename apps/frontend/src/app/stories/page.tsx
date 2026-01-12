@@ -20,7 +20,9 @@ function StoriesContent() {
     const initialSearch = searchParams.get('search') || '';
     const initialCategory = searchParams.get('category') || '';
     // Empty string means "all statuses" - let backend handle filtering by isPublished=true
-    const initialStatus = searchParams.get('status') || '';
+    // Don't allow DRAFT status on public page - filter it out
+    const urlStatus = searchParams.get('status') || '';
+    const initialStatus = urlStatus === 'DRAFT' ? '' : urlStatus;
     const initialSortBy = (searchParams.get('sortBy') as 'newest' | 'popular' | 'rating' | 'viewCount') || 'newest';
 
     // State
@@ -47,8 +49,9 @@ function StoriesContent() {
 
         if (search) params.search = search;
         if (selectedCategory) params.categories = [selectedCategory]; // Backend expects slug, not id
-        // Only add status filter if user explicitly selected one
-        if (status) params.status = status;
+        // Only add status filter if user explicitly selected one and it's not DRAFT
+        // DRAFT status should not be accessible on public page
+        if (status && status !== 'DRAFT') params.status = status;
         // If no status selected, backend will default to showing all published stories (excluding drafts)
 
         return params;
@@ -65,8 +68,9 @@ function StoriesContent() {
         if (page > 1) params.set('page', page.toString());
         if (search) params.set('search', search);
         if (selectedCategory) params.set('category', selectedCategory);
-        // Only add status to URL if user explicitly selected one
-        if (status) params.set('status', status);
+        // Only add status to URL if user explicitly selected one and it's not DRAFT
+        // DRAFT status should not be accessible on public page
+        if (status && status !== 'DRAFT') params.set('status', status);
         if (sortBy !== 'newest') params.set('sortBy', sortBy);
 
         const newUrl = params.toString() ? `/stories?${params.toString()}` : '/stories';
@@ -83,7 +87,9 @@ function StoriesContent() {
         const urlPage = parseInt(searchParams.get('page') || '1', 10);
         const urlSearch = searchParams.get('search') || '';
         const urlCategory = searchParams.get('category') || '';
-        const urlStatus = searchParams.get('status') || '';
+        const urlStatusParam = searchParams.get('status') || '';
+        // Filter out DRAFT status - don't allow it on public page
+        const urlStatus = urlStatusParam === 'DRAFT' ? '' : urlStatusParam;
         const urlSortBy = (searchParams.get('sortBy') as 'newest' | 'popular' | 'rating' | 'viewCount') || 'newest';
 
         if (urlPage !== page) setPage(urlPage);
@@ -91,6 +97,14 @@ function StoriesContent() {
         if (urlCategory !== selectedCategory) setSelectedCategory(urlCategory);
         if (urlStatus !== status) setStatus(urlStatus);
         if (urlSortBy !== sortBy) setSortBy(urlSortBy);
+
+        // If URL has DRAFT status, remove it from URL
+        if (urlStatusParam === 'DRAFT') {
+            const params = new URLSearchParams(searchParams.toString());
+            params.delete('status');
+            const newUrl = params.toString() ? `/stories?${params.toString()}` : '/stories';
+            router.replace(newUrl, { scroll: false });
+        }
     }, [searchParams]);
 
     const handleResetFilters = () => {
@@ -315,11 +329,10 @@ function StoriesContent() {
                                                         <button
                                                             key={pageNum}
                                                             onClick={() => setPage(pageNum)}
-                                                            className={`px-3 py-2 text-sm border rounded-lg transition-colors ${
-                                                                page === pageNum
+                                                            className={`px-3 py-2 text-sm border rounded-lg transition-colors ${page === pageNum
                                                                     ? 'bg-blue-500 text-white border-blue-500'
                                                                     : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                                                            }`}
+                                                                }`}
                                                         >
                                                             {pageNum}
                                                         </button>

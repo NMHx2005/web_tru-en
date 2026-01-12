@@ -18,7 +18,7 @@ import { LikeButton } from '@/components/stories/like-button';
 import { CommentSection } from '@/components/comments/comment-section';
 import { StarRating } from '@/components/stories/star-rating';
 import { PopupSupportContent } from '@/components/pages/popup-support-content';
-import { ArrowLeft, BookOpen, HeartHandshake, Share2 } from 'lucide-react';
+import { ArrowLeft, BookOpen, HeartHandshake, Share2, Megaphone } from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
 
 export default function BookDetailPage() {
@@ -400,12 +400,12 @@ export default function BookDetailPage() {
                 <div>
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Trạng thái</p>
                   <p className={`text-base font-medium ${!story.isPublished
-                      ? 'text-yellow-600 dark:text-yellow-400'
-                      : story.status === 'ONGOING'
-                        ? 'text-blue-600 dark:text-blue-400'
-                        : story.status === 'COMPLETED'
-                          ? 'text-green-600 dark:text-green-400'
-                          : 'text-gray-900 dark:text-white'
+                    ? 'text-yellow-600 dark:text-yellow-400'
+                    : story.status === 'ONGOING'
+                      ? 'text-blue-600 dark:text-blue-400'
+                      : story.status === 'COMPLETED'
+                        ? 'text-green-600 dark:text-green-400'
+                        : 'text-gray-900 dark:text-white'
                     }`}>
                     {!story.isPublished
                       ? 'Bản nháp'
@@ -422,6 +422,7 @@ export default function BookDetailPage() {
 
               {/* Action Buttons */}
               <div className="flex flex-wrap items-center gap-3 md:gap-4 mb-6 md:mb-8">
+                {/* Primary Action - Đọc truyện */}
                 {chapters && chapters.length > 0 ? (
                   <Link
                     href={`/stories/${story.slug}/chapters/${chapters[0].slug}`}
@@ -440,28 +441,36 @@ export default function BookDetailPage() {
                   </button>
                 )}
 
-                {/* Follow Button */}
+                {/* Support Buttons */}
+                <button
+                  onClick={() => setShowSupportModal(true)}
+                  className="flex items-center gap-2 px-4 md:px-6 py-2.5 md:py-3 bg-pink-500 hover:bg-pink-600 dark:bg-pink-600 dark:hover:bg-pink-700 text-white rounded-lg text-sm md:text-base font-medium transition-all duration-300 hover:scale-105 active:scale-95"
+                >
+                  <HeartHandshake size={20} className="md:w-6 md:h-6" />
+                  <span className="hidden sm:inline">Ủng hộ làm phim</span>
+                  <span className="sm:hidden">Ủng hộ</span>
+                </button>
+
+                <Link
+                  href="/lien-he-quang-cao"
+                  className="flex items-center gap-2 px-4 md:px-6 py-2.5 md:py-3 bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-700 text-white rounded-lg text-sm md:text-base font-medium transition-all duration-300 hover:scale-105 active:scale-95"
+                >
+                  <Megaphone size={20} className="md:w-6 md:h-6" />
+                  <span className="hidden sm:inline">Tài trợ quảng cáo</span>
+                  <span className="sm:hidden">Tài trợ</span>
+                </Link>
+
+                {/* Interaction Buttons */}
                 <FollowButton storyId={story.id} showText={false} className="w-[44px] h-[44px] md:w-[48px] md:h-[48px] p-0 flex items-center justify-center" />
 
-                {/* Like Button */}
                 <LikeButton storyId={story.id} likeCount={story.likeCount} showCount={false} className="w-[44px] h-[44px] md:w-[48px] md:h-[48px] p-0 flex items-center justify-center" />
 
-                {/* Share Button */}
                 <button
                   onClick={handleShare}
                   className="w-[44px] h-[44px] md:w-[48px] md:h-[48px] flex items-center justify-center bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white rounded-lg transition-all duration-300 hover:scale-105 active:scale-95"
                   aria-label="Chia sẻ"
                 >
                   <Share2 size={20} className="md:w-6 md:h-6" />
-                </button>
-
-                <button
-                  onClick={() => setShowSupportModal(true)}
-                  className="flex items-center gap-2 px-4 md:px-6 py-2.5 md:py-3 bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white rounded-lg text-sm md:text-base font-medium transition-all duration-300 hover:scale-105 active:scale-95"
-                >
-                  <HeartHandshake size={20} className="md:w-6 md:h-6" />
-                  <span className="hidden sm:inline">Ủng hộ làm phim</span>
-                  <span className="sm:hidden">Ủng hộ</span>
                 </button>
               </div>
 

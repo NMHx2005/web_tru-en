@@ -27,10 +27,10 @@ async function getStoryAndChapter(storySlug: string, chapterSlug: string) {
     // In production, if API is not available during build, return null
     // Client-side will handle the error display
     // Only log non-connection errors to reduce noise
-    if (error?.code !== 'ECONNREFUSED' && 
-        error?.cause?.code !== 'ECONNREFUSED' && 
-        error?.name !== 'AbortError' &&
-        error?.code !== 'ETIMEDOUT') {
+    if (error?.code !== 'ECONNREFUSED' &&
+      error?.cause?.code !== 'ECONNREFUSED' &&
+      error?.name !== 'AbortError' &&
+      error?.code !== 'ETIMEDOUT') {
       console.error('Error fetching story/chapter for metadata:', error);
     }
     // Return null to let client-side handle the error
@@ -46,7 +46,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   // Client-side will handle the actual error display
   if (!story || !chapter) {
     return {
-      title: `Chương ${params.chapterSlug} - ${params.storySlug}`,
+      title: 'Đang tải...',
       description: 'Đang tải nội dung chương...',
     };
   }

@@ -36,7 +36,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   // Client-side will handle the actual error display
   if (!story) {
     return {
-      title: params.slug,
+      title: 'Đang tải...',
       description: 'Đang tải thông tin truyện...',
     };
   }
@@ -44,7 +44,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
   const storyUrl = `${siteUrl}/truyen/${story.slug}`;
   const coverImage = story.coverImage || `${siteUrl}/default-cover.jpg`;
-  const description = story.description 
+  const description = story.description
     ? (story.description.length > 160 ? story.description.substring(0, 157) + '...' : story.description)
     : `Đọc truyện ${story.title} - ${story.authorName || 'Tác giả'}`;
 

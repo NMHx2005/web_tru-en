@@ -201,6 +201,17 @@ export function shouldShowPopup(chapterId: string, popupInterval?: number): bool
     const lastPopupVisitCount = typeof tracker.lastPopupVisitCount === 'number' ? tracker.lastPopupVisitCount : 0;
     const visitsSinceLastPopup = tracker.visitCount - lastPopupVisitCount;
 
+    // Show popup after every N chapters since last popup
+    // Logic: Show popup when visitsSinceLastPopup >= interval
+    // Example with interval=3:
+    // - First time: visitsSinceLastPopup >= 3 (after 3 chapters)
+    // - After popup: reset lastPopupVisitCount, then count again
+    // - Next popup: visitsSinceLastPopup >= 3 again (after another 3 chapters)
+
+    // Show popup when we've visited at least 'interval' chapters since last popup
+    // For first popup, ensure we've visited at least 'interval' chapters total
+    const shouldShow = visitsSinceLastPopup >= interval && (lastPopupVisitCount > 0 || tracker.visitCount >= interval);
+
     // Log for debugging (development only)
     if (process.env.NODE_ENV === 'development') {
         console.log('Checking popup:', {
@@ -209,28 +220,12 @@ export function shouldShowPopup(chapterId: string, popupInterval?: number): bool
             lastPopupVisitCount: tracker.lastPopupVisitCount,
             visitsSinceLastPopup,
             interval,
-            condition: `visitsSinceLastPopup === ${interval + 1} && visitCount > ${interval}`,
-            result: visitsSinceLastPopup === interval + 1 && tracker.visitCount > interval,
+            condition: `visitsSinceLastPopup >= ${interval} && (lastPopupVisitCount > 0 || visitCount >= ${interval})`,
+            result: shouldShow,
         });
     }
 
-    // Show popup when we've visited exactly (interval + 1) chapters since last popup
-    // This means: after visiting N chapters, the (N+1)th chapter will show popup
-    // Example with interval=3:
-    // - Chapter 1: visitCount=1, lastPopupVisitCount=0, visitsSinceLastPopup=1, 1 === 4? → false ✅
-    // - Chapter 2: visitCount=2, lastPopupVisitCount=0, visitsSinceLastPopup=2, 2 === 4? → false ✅
-    // - Chapter 3: visitCount=3, lastPopupVisitCount=0, visitsSinceLastPopup=3, 3 === 4? → false ✅
-    // - Chapter 4: visitCount=4, lastPopupVisitCount=0, visitsSinceLastPopup=4, 4 === 4? → true ✅
-
-    // After popup shown, lastPopupVisitCount = 4:
-    // - Chapter 5: visitCount=5, lastPopupVisitCount=4, visitsSinceLastPopup=1, 1 === 4? → false ✅
-    // - Chapter 6: visitCount=6, lastPopupVisitCount=4, visitsSinceLastPopup=2, 2 === 4? → false ✅
-    // - Chapter 7: visitCount=7, lastPopupVisitCount=4, visitsSinceLastPopup=3, 3 === 4? → false ✅
-    // - Chapter 8: visitCount=8, lastPopupVisitCount=4, visitsSinceLastPopup=4, 4 === 4? → true ✅
-
-    // Ensure we don't show popup on first visit if lastPopupVisitCount is 0
-    // Only show if visitsSinceLastPopup is exactly interval + 1
-    if (visitsSinceLastPopup === interval + 1 && tracker.visitCount > interval) {
+    if (shouldShow) {
         // Mark this chapter as the last popup trigger and save current visit count
         tracker.lastPopupChapter = chapterId;
         tracker.lastPopupVisitCount = tracker.visitCount;
@@ -307,5 +302,27 @@ export function resetReadingTracker(): void {
     if (process.env.NODE_ENV === 'development') {
         console.log('Reading tracker reset');
     }
+}
+
+/**
+ * Get debug info for popup ads (for troubleshooting)
+ */
+export function getPopupDebugInfo(popupInterval?: number): any {
+    const tracker = getReadingTracker();
+    const interval = popupInterval || DEFAULT_POPUP_INTERVAL;
+    const lastPopupVisitCount = typeof tracker.lastPopupVisitCount === 'number' ? tracker.lastPopupVisitCount : 0;
+    const visitsSinceLastPopup = tracker.visitCount - lastPopupVisitCount;
+    const shouldShow = visitsSinceLastPopup === interval + 1 && tracker.visitCount > interval;
+
+    return {
+        visitCount: tracker.visitCount,
+        lastPopupVisitCount,
+        visitsSinceLastPopup,
+        interval,
+        shouldShow,
+        chaptersUntilPopup: (interval + 1) - visitsSinceLastPopup,
+        lastPopupChapter: tracker.lastPopupChapter,
+        popupCount: tracker.popupCount,
+    };
 }
 

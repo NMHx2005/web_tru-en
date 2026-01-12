@@ -224,13 +224,36 @@ export default function ChapterReadingPage() {
         // Check if should redirect to ad page immediately (after visiting enough chapters)
         // Use popupInterval from ad if available, otherwise use default
         // Use popupAds directly to avoid dependency array size changes
+        console.log('Popup ads check:', {
+            popupAdsLength: popupAds?.length || 0,
+            popupAds: popupAds,
+            chapterId,
+            visitCount: getVisitCount(),
+        });
+
         if (Array.isArray(popupAds) && popupAds.length > 0) {
             // Filter valid ads
             const validAds = popupAds.filter((ad: any) => ad.imageUrl);
+            console.log('Valid popup ads:', {
+                validAdsLength: validAds.length,
+                validAds: validAds.map((ad: any) => ({
+                    id: ad.id,
+                    title: ad.title,
+                    popupInterval: ad.popupInterval,
+                    isActive: ad.isActive,
+                })),
+            });
+
             if (validAds.length > 0) {
                 // Find ad with popupInterval (prefer ads with custom interval)
                 const adWithInterval = validAds.find((ad: any) => ad.popupInterval) || validAds[0];
                 const popupInterval = adWithInterval?.popupInterval || 3;
+
+                console.log('Popup interval check:', {
+                    popupInterval,
+                    chapterId,
+                    visitCount: getVisitCount(),
+                });
 
                 // Check if should show popup (check immediately, no delay)
                 if (shouldShowPopup(chapterId, popupInterval)) {
@@ -243,15 +266,18 @@ export default function ChapterReadingPage() {
                         const returnUrl = `/stories/${storySlug}/chapters/${chapterSlug}`;
                         const adUrl = `/ads/${selectedAd.id}?return=${encodeURIComponent(returnUrl)}&story=${storySlug}&chapter=${chapterSlug}`;
 
-                        // Log for debugging (development only)
-                        if (process.env.NODE_ENV === 'development') {
-                            console.log('Redirecting to ad page:', { adUrl, visitCount: getVisitCount() });
-                        }
+                        console.log('Redirecting to ad page:', { adUrl, visitCount: getVisitCount(), selectedAd });
                         router.push(adUrl);
                         return; // Don't continue with page setup, we're redirecting
                     }
+                } else {
+                    console.log('Popup should NOT be shown for this chapter');
                 }
+            } else {
+                console.log('No valid popup ads (no imageUrl)');
             }
+        } else {
+            console.log('No popup ads found or popupAds is not an array');
         }
 
         // Start tracking reading time (only if not redirecting)
@@ -624,118 +650,50 @@ export default function ChapterReadingPage() {
                 <AdBanner position={AdPosition.TOP} />
 
                 <main className="pt-4 md:pt-8 pb-12 min-h-[calc(100vh-60px)]">
-                    {/* Story Header */}
-                    <div className="w-full px-4 md:px-6 lg:pr-[300px] mb-6">
-                        <button
-                            onClick={handleBack}
-                            className="text-blue-500 hover:text-blue-600 dark:text-blue-400 mb-2 inline-block text-left"
-                        >
-                            ← Quay lại: {(story as any)?.data?.title || (story as any)?.title || 'Truyện'}
-                        </button>
-                        <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-2">
-                            {chapterData.title}
-                        </h1>
-                        <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
-                            <span>{chapterData.readingTime} phút đọc</span>
-                            <span>•</span>
-                            <span>{chapterData.wordCount.toLocaleString()} từ</span>
-                            <span>•</span>
-                            <span>{chapterData.viewCount.toLocaleString()} lượt xem</span>
-                        </div>
-                    </div>
-
-                    {/* Reading Controls */}
-                    <div className="w-full px-4 md:px-6 lg:pr-[300px] mb-4">
-                        <div className="sticky top-0 z-10 flex items-center justify-between bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm border-b border-gray-200 dark:border-gray-700">
-                            <div className="flex items-center gap-4 flex-wrap">
-                                <button
-                                    onClick={() => {
-                                        setShowChapterList(!showChapterList);
-                                    }}
-                                    className="p-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-gray-700 dark:text-gray-300 transition-colors"
-                                    aria-label={showChapterList ? 'Ẩn danh sách chương' : 'Hiện danh sách chương'}
-                                >
-                                    <BookOpen size={20} />
-                                </button>
-
-                                {/* Previous/Next Chapter Buttons */}
-                                <div className="flex items-center gap-2">
-                                    {prevChapter ? (
-                                        <Link
-                                            href={shouldRedirectToAdRef.current && pendingAdRef.current
-                                                ? `/ads/${pendingAdRef.current.id}?return=/stories/${storySlug}/chapters/${prevChapter.slug}&story=${storySlug}&prev=${prevChapter.slug}${nextChapter ? `&next=${nextChapter.slug}` : ''}`
-                                                : `/stories/${storySlug}/chapters/${prevChapter.slug}`}
-                                            className="group px-4 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 dark:from-blue-600 dark:to-indigo-600 dark:hover:from-blue-700 dark:hover:to-indigo-700 rounded-lg text-sm font-semibold text-white transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg hover:scale-105"
-                                            onClick={() => {
-                                                shouldRedirectToAdRef.current = false;
-                                                pendingAdRef.current = null;
-                                            }}
-                                        >
-                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="group-hover:-translate-x-1 transition-transform">
-                                                <path d="M15 18l-6-6 6-6" />
-                                            </svg>
-                                            <span>Trước</span>
-                                        </Link>
-                                    ) : (
-                                        <button
-                                            disabled
-                                            className="px-4 py-2.5 bg-gray-200 dark:bg-gray-700 rounded-lg text-sm font-medium text-gray-400 dark:text-gray-600 cursor-not-allowed flex items-center gap-2"
-                                        >
-                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                                <path d="M15 18l-6-6 6-6" />
-                                            </svg>
-                                            <span>Trước</span>
-                                        </button>
-                                    )}
-                                    {nextChapter ? (
-                                        <Link
-                                            href={shouldRedirectToAdRef.current && pendingAdRef.current
-                                                ? `/ads/${pendingAdRef.current.id}?return=/stories/${storySlug}/chapters/${nextChapter.slug}&story=${storySlug}&next=${nextChapter.slug}${prevChapter ? `&prev=${prevChapter.slug}` : ''}`
-                                                : `/stories/${storySlug}/chapters/${nextChapter.slug}`}
-                                            className="group px-4 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 dark:from-indigo-600 dark:to-purple-600 dark:hover:from-indigo-700 dark:hover:to-purple-700 rounded-lg text-sm font-semibold text-white transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg hover:scale-105"
-                                            onClick={() => {
-                                                shouldRedirectToAdRef.current = false;
-                                                pendingAdRef.current = null;
-                                            }}
-                                        >
-                                            <span>Sau</span>
-                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="group-hover:translate-x-1 transition-transform">
-                                                <path d="M9 18l6-6-6-6" />
-                                            </svg>
-                                        </Link>
-                                    ) : (
-                                        <button
-                                            disabled
-                                            className="px-4 py-2.5 bg-gray-200 dark:bg-gray-700 rounded-lg text-sm font-medium text-gray-400 dark:text-gray-600 cursor-not-allowed flex items-center gap-2"
-                                        >
-                                            <span>Sau</span>
-                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                                <path d="M9 18l6-6-6-6" />
-                                            </svg>
-                                        </button>
-                                    )}
+                    {/* Story Header - Centered */}
+                    <div className="w-full px-4 md:px-6 lg:pr-[300px] mb-8">
+                        <div className="max-w-4xl mx-auto md:text-center text-left">
+                            <button
+                                onClick={handleBack}
+                                className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 mb-4 inline-flex items-center gap-2 font-medium transition-colors"
+                            >
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M19 12H5M12 19l-7-7 7-7" />
+                                </svg>
+                                <span>Quay lại: {(story as any)?.data?.title || (story as any)?.title || 'Truyện'}</span>
+                            </button>
+                            <h1 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4 leading-tight">
+                                {chapterData.title}
+                            </h1>
+                            <div className="flex items-center md:justify-center justify-start gap-3 text-sm text-gray-600 dark:text-gray-400">
+                                <div className="flex items-center gap-1.5">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <circle cx="12" cy="12" r="10" />
+                                        <polyline points="12 6 12 12 16 14" />
+                                    </svg>
+                                    <span>{chapterData.readingTime} phút đọc</span>
                                 </div>
-
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        onClick={() => setFontSize(Math.max(12, fontSize - 2))}
-                                        className="w-8 h-8 flex items-center justify-center bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded text-gray-700 dark:text-gray-300"
-                                    >
-                                        -
-                                    </button>
-                                    <span className="text-sm text-gray-600 dark:text-gray-400 min-w-[40px] text-center">
-                                        {fontSize}px
-                                    </span>
-                                    <button
-                                        onClick={() => setFontSize(Math.min(24, fontSize + 2))}
-                                        className="w-8 h-8 flex items-center justify-center bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded text-gray-700 dark:text-gray-300 font-bold"
-                                    >
-                                        +
-                                    </button>
+                                <span className="text-gray-400 dark:text-gray-600">•</span>
+                                <div className="flex items-center gap-1.5">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                        <polyline points="14 2 14 8 20 8" />
+                                    </svg>
+                                    <span>{chapterData.wordCount.toLocaleString()} từ</span>
+                                </div>
+                                <span className="text-gray-400 dark:text-gray-600">•</span>
+                                <div className="flex items-center gap-1.5">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                        <circle cx="12" cy="12" r="3" />
+                                    </svg>
+                                    <span>{chapterData.viewCount.toLocaleString()} lượt xem</span>
                                 </div>
                             </div>
                         </div>
                     </div>
+
+
 
                     {/* Main Layout: Content full width, Sidebar sticky outside */}
                     <div className="w-full">
@@ -838,172 +796,192 @@ export default function ChapterReadingPage() {
 
                     {/* Bottom Banner Ad */}
                     <div className="w-full px-4 md:px-6 mt-8 mb-8">
-                        <AdBanner position={AdPosition.BOTTOM} />
+                        <div className="max-w-4xl mx-auto">
+                            <AdBanner position={AdPosition.BOTTOM} />
+                        </div>
                     </div>
 
                     {/* Navigation */}
                     <div className="w-full px-4 md:px-6  mt-8 mb-8">
-                        <div className="flex items-center justify-between gap-4">
-                            <div className="flex-1">
-                                {prevChapter ? (
-                                    <Link
-                                        href={shouldRedirectToAdRef.current && pendingAdRef.current
-                                            ? `/ads/${pendingAdRef.current.id}?return=/stories/${storySlug}/chapters/${prevChapter.slug}&story=${storySlug}&prev=${prevChapter.slug}${nextChapter ? `&next=${nextChapter.slug}` : ''}`
-                                            : `/stories/${storySlug}/chapters/${prevChapter.slug}`}
-                                        className="group block p-5 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl shadow-md hover:shadow-lg border border-blue-100 dark:border-blue-800/50 transition-all duration-300 hover:scale-[1.02]"
-                                        onClick={() => {
-                                            // Reset redirect flag after clicking
-                                            shouldRedirectToAdRef.current = false;
-                                            pendingAdRef.current = null;
-                                        }}
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-blue-500 dark:bg-blue-600 flex items-center justify-center text-white group-hover:bg-blue-600 dark:group-hover:bg-blue-700 transition-colors">
-                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                                    <path d="M15 18l-6-6 6-6" />
-                                                </svg>
+                        <div className="max-w-4xl mx-auto">
+                            <div className="flex items-center justify-between gap-4">
+                                <div className="flex-1">
+                                    {prevChapter ? (
+                                        <Link
+                                            href={shouldRedirectToAdRef.current && pendingAdRef.current
+                                                ? `/ads/${pendingAdRef.current.id}?return=/stories/${storySlug}/chapters/${prevChapter.slug}&story=${storySlug}&prev=${prevChapter.slug}${nextChapter ? `&next=${nextChapter.slug}` : ''}`
+                                                : `/stories/${storySlug}/chapters/${prevChapter.slug}`}
+                                            className="group block p-5 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl shadow-md hover:shadow-lg border border-blue-100 dark:border-blue-800/50 transition-all duration-300 hover:scale-[1.02]"
+                                            onClick={() => {
+                                                // Reset redirect flag after clicking
+                                                shouldRedirectToAdRef.current = false;
+                                                pendingAdRef.current = null;
+                                            }}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-blue-500 dark:bg-blue-600 flex items-center justify-center text-white group-hover:bg-blue-600 dark:group-hover:bg-blue-700 transition-colors">
+                                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                        <path d="M15 18l-6-6 6-6" />
+                                                    </svg>
+                                                </div>
+                                                <div className="text-sm font-semibold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                                                    Trước
+                                                </div>
                                             </div>
-                                            <div className="text-sm font-semibold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                                                Trước
+                                        </Link>
+                                    ) : (
+                                        <div className="p-5 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800">
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-600">
+                                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                        <path d="M15 18l-6-6 6-6" />
+                                                    </svg>
+                                                </div>
+                                                <div className="text-sm text-gray-400 dark:text-gray-600">Trước</div>
                                             </div>
                                         </div>
-                                    </Link>
-                                ) : (
-                                    <div className="p-5 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800">
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-600">
-                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                                    <path d="M15 18l-6-6 6-6" />
-                                                </svg>
-                                            </div>
-                                            <div className="text-sm text-gray-400 dark:text-gray-600">Trước</div>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
+                                    )}
+                                </div>
 
-                            <div className="flex-1">
-                                {nextChapter ? (
-                                    <Link
-                                        href={shouldRedirectToAdRef.current && pendingAdRef.current
-                                            ? `/ads/${pendingAdRef.current.id}?return=/stories/${storySlug}/chapters/${nextChapter.slug}&story=${storySlug}&next=${nextChapter.slug}${prevChapter ? `&prev=${prevChapter.slug}` : ''}`
-                                            : `/stories/${storySlug}/chapters/${nextChapter.slug}`}
-                                        className="group block p-5 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-xl shadow-md hover:shadow-lg border border-indigo-100 dark:border-indigo-800/50 transition-all duration-300 hover:scale-[1.02] text-right"
-                                        onClick={() => {
-                                            // Reset redirect flag after clicking
-                                            shouldRedirectToAdRef.current = false;
-                                            pendingAdRef.current = null;
-                                        }}
-                                    >
-                                        <div className="flex items-center gap-3 flex-row-reverse">
-                                            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-indigo-500 dark:bg-indigo-600 flex items-center justify-center text-white group-hover:bg-indigo-600 dark:group-hover:bg-indigo-700 transition-colors">
-                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                                    <path d="M9 18l6-6-6-6" />
-                                                </svg>
+                                <div className="flex-1">
+                                    {nextChapter ? (
+                                        <Link
+                                            href={shouldRedirectToAdRef.current && pendingAdRef.current
+                                                ? `/ads/${pendingAdRef.current.id}?return=/stories/${storySlug}/chapters/${nextChapter.slug}&story=${storySlug}&next=${nextChapter.slug}${prevChapter ? `&prev=${prevChapter.slug}` : ''}`
+                                                : `/stories/${storySlug}/chapters/${nextChapter.slug}`}
+                                            className="group block p-5 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-xl shadow-md hover:shadow-lg border border-indigo-100 dark:border-indigo-800/50 transition-all duration-300 hover:scale-[1.02] text-right"
+                                            onClick={() => {
+                                                // Reset redirect flag after clicking
+                                                shouldRedirectToAdRef.current = false;
+                                                pendingAdRef.current = null;
+                                            }}
+                                        >
+                                            <div className="flex items-center gap-3 flex-row-reverse">
+                                                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-indigo-500 dark:bg-indigo-600 flex items-center justify-center text-white group-hover:bg-indigo-600 dark:group-hover:bg-indigo-700 transition-colors">
+                                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                        <path d="M9 18l6-6-6-6" />
+                                                    </svg>
+                                                </div>
+                                                <div className="text-sm font-semibold text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                                                    Sau
+                                                </div>
                                             </div>
-                                            <div className="text-sm font-semibold text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                                                Sau
+                                        </Link>
+                                    ) : (
+                                        <div className="p-5 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 text-right">
+                                            <div className="flex items-center gap-3 flex-row-reverse">
+                                                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-600">
+                                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                        <path d="M9 18l6-6-6-6" />
+                                                    </svg>
+                                                </div>
+                                                <div className="text-sm text-gray-400 dark:text-gray-600">Sau</div>
                                             </div>
                                         </div>
-                                    </Link>
-                                ) : (
-                                    <div className="p-5 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 text-right">
-                                        <div className="flex items-center gap-3 flex-row-reverse">
-                                            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-600">
-                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                                    <path d="M9 18l6-6-6-6" />
-                                                </svg>
-                                            </div>
-                                            <div className="text-sm text-gray-400 dark:text-gray-600">Sau</div>
-                                        </div>
-                                    </div>
-                                )}
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>
                 </main>
                 <Footer />
-            </div>
+            </div >
 
             {/* Floating Action Button with Menu */}
-            <div ref={floatingMenuRef} className="fixed bottom-6 right-6 z-50">
+            < div ref={floatingMenuRef} className="fixed bottom-6 right-6 z-50" >
                 {/* Menu Options */}
-                {showFloatingMenu && (
-                    <div className="absolute bottom-16 right-0 mb-2 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-2 min-w-[200px] animate-in fade-in slide-in-from-bottom-2 duration-200">
-                        {/* Font Size Controls */}
-                        <div className="mb-2 pb-2 border-b border-gray-200 dark:border-gray-700">
-                            <div className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300">
-                                <Type size={16} />
-                                <span className="font-medium">Kích cỡ chữ</span>
-                            </div>
-                            <div className="flex items-center justify-between gap-2 px-3 py-2">
+                {
+                    showFloatingMenu && (
+                        <div className="absolute bottom-16 right-0 mb-2 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-2 min-w-[200px] animate-in fade-in slide-in-from-bottom-2 duration-200">
+                            {/* Chapter List Toggle - Desktop Only */}
+                            <div className="hidden md:block mb-2 pb-2 border-b border-gray-200 dark:border-gray-700">
                                 <button
-                                    onClick={() => setFontSize(Math.max(12, fontSize - 2))}
-                                    className="w-8 h-8 flex items-center justify-center bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded text-gray-700 dark:text-gray-300 transition-colors"
-                                    aria-label="Giảm kích cỡ chữ"
+                                    onClick={() => {
+                                        setShowChapterList(!showChapterList);
+                                        setShowFloatingMenu(false);
+                                    }}
+                                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                                 >
-                                    -
-                                </button>
-                                <span className="text-sm text-gray-600 dark:text-gray-400 min-w-[50px] text-center font-medium">
-                                    {fontSize}px
-                                </span>
-                                <button
-                                    onClick={() => setFontSize(Math.min(24, fontSize + 2))}
-                                    className="w-8 h-8 flex items-center justify-center bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded text-gray-700 dark:text-gray-300 font-bold transition-colors"
-                                    aria-label="Tăng kích cỡ chữ"
-                                >
-                                    +
+                                    <BookOpen size={18} />
+                                    <span>{showChapterList ? 'Ẩn danh sách chương' : 'Hiện danh sách chương'}</span>
                                 </button>
                             </div>
-                        </div>
 
-                        {/* Chapter Navigation */}
-                        <div className="space-y-1">
-                            {prevChapter ? (
-                                <Link
-                                    href={shouldRedirectToAdRef.current && pendingAdRef.current
-                                        ? `/ads/${pendingAdRef.current.id}?return=/stories/${storySlug}/chapters/${prevChapter.slug}&story=${storySlug}&prev=${prevChapter.slug}${nextChapter ? `&next=${nextChapter.slug}` : ''}`
-                                        : `/stories/${storySlug}/chapters/${prevChapter.slug}`}
-                                    onClick={() => {
-                                        setShowFloatingMenu(false);
-                                        shouldRedirectToAdRef.current = false;
-                                        pendingAdRef.current = null;
-                                    }}
-                                    className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                                >
-                                    <ChevronLeft size={18} />
-                                    <span>Chương trước</span>
-                                </Link>
-                            ) : (
-                                <div className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-400 dark:text-gray-600 cursor-not-allowed">
-                                    <ChevronLeft size={18} />
-                                    <span>Chương trước</span>
+                            {/* Font Size Controls */}
+                            <div className="mb-2 pb-2 border-b border-gray-200 dark:border-gray-700">
+                                <div className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300">
+                                    <Type size={16} />
+                                    <span className="font-medium">Kích cỡ chữ</span>
                                 </div>
-                            )}
-                            {nextChapter ? (
-                                <Link
-                                    href={shouldRedirectToAdRef.current && pendingAdRef.current
-                                        ? `/ads/${pendingAdRef.current.id}?return=/stories/${storySlug}/chapters/${nextChapter.slug}&story=${storySlug}&next=${nextChapter.slug}${prevChapter ? `&prev=${prevChapter.slug}` : ''}`
-                                        : `/stories/${storySlug}/chapters/${nextChapter.slug}`}
-                                    onClick={() => {
-                                        setShowFloatingMenu(false);
-                                        shouldRedirectToAdRef.current = false;
-                                        pendingAdRef.current = null;
-                                    }}
-                                    className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                                >
-                                    <ChevronRight size={18} />
-                                    <span>Chương sau</span>
-                                </Link>
-                            ) : (
-                                <div className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-400 dark:text-gray-600 cursor-not-allowed">
-                                    <ChevronRight size={18} />
-                                    <span>Chương sau</span>
+                                <div className="flex items-center justify-between gap-2 px-3 py-2">
+                                    <button
+                                        onClick={() => setFontSize(Math.max(12, fontSize - 2))}
+                                        className="w-8 h-8 flex items-center justify-center bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded text-gray-700 dark:text-gray-300 transition-colors"
+                                        aria-label="Giảm kích cỡ chữ"
+                                    >
+                                        -
+                                    </button>
+                                    <span className="text-sm text-gray-600 dark:text-gray-400 min-w-[50px] text-center font-medium">
+                                        {fontSize}px
+                                    </span>
+                                    <button
+                                        onClick={() => setFontSize(Math.min(24, fontSize + 2))}
+                                        className="w-8 h-8 flex items-center justify-center bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded text-gray-700 dark:text-gray-300 font-bold transition-colors"
+                                        aria-label="Tăng kích cỡ chữ"
+                                    >
+                                        +
+                                    </button>
                                 </div>
-                            )}
+                            </div>
+
+                            {/* Chapter Navigation */}
+                            <div className="space-y-1">
+                                {prevChapter ? (
+                                    <Link
+                                        href={shouldRedirectToAdRef.current && pendingAdRef.current
+                                            ? `/ads/${pendingAdRef.current.id}?return=/stories/${storySlug}/chapters/${prevChapter.slug}&story=${storySlug}&prev=${prevChapter.slug}${nextChapter ? `&next=${nextChapter.slug}` : ''}`
+                                            : `/stories/${storySlug}/chapters/${prevChapter.slug}`}
+                                        onClick={() => {
+                                            setShowFloatingMenu(false);
+                                            shouldRedirectToAdRef.current = false;
+                                            pendingAdRef.current = null;
+                                        }}
+                                        className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                    >
+                                        <ChevronLeft size={18} />
+                                        <span>Chương trước</span>
+                                    </Link>
+                                ) : (
+                                    <div className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-400 dark:text-gray-600 cursor-not-allowed">
+                                        <ChevronLeft size={18} />
+                                        <span>Chương trước</span>
+                                    </div>
+                                )}
+                                {nextChapter ? (
+                                    <Link
+                                        href={shouldRedirectToAdRef.current && pendingAdRef.current
+                                            ? `/ads/${pendingAdRef.current.id}?return=/stories/${storySlug}/chapters/${nextChapter.slug}&story=${storySlug}&next=${nextChapter.slug}${prevChapter ? `&prev=${prevChapter.slug}` : ''}`
+                                            : `/stories/${storySlug}/chapters/${nextChapter.slug}`}
+                                        onClick={() => {
+                                            setShowFloatingMenu(false);
+                                            shouldRedirectToAdRef.current = false;
+                                            pendingAdRef.current = null;
+                                        }}
+                                        className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                    >
+                                        <ChevronRight size={18} />
+                                        <span>Chương sau</span>
+                                    </Link>
+                                ) : (
+                                    <div className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-400 dark:text-gray-600 cursor-not-allowed">
+                                        <ChevronRight size={18} />
+                                        <span>Chương sau</span>
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                    </div>
-                )}
+                    )
+                }
 
                 {/* FAB Button */}
                 <button
@@ -1017,7 +995,7 @@ export default function ChapterReadingPage() {
                         <Menu size={24} className="transition-transform duration-200" />
                     )}
                 </button>
-            </div>
-        </div>
+            </div >
+        </div >
     );
 }

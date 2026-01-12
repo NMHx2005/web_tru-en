@@ -55,18 +55,27 @@ export function FollowButton({ storyId, className = '', showText = true }: Follo
   };
 
   if (!user) {
-    return null; // Don't show button if not logged in
+    return (
+      <button
+        disabled
+        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors opacity-50 cursor-not-allowed ${className}`}
+      >
+        <svg className="w-full h-full" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+        </svg>
+        {showText && <span>Theo dõi</span>}
+      </button>
+    );
   }
 
   return (
     <button
       onClick={handleToggle}
       disabled={isLoading}
-      className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
-        isFollowing
+      className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${isFollowing
           ? 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200'
           : 'bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white'
-      } ${className}`}
+        } ${className}`}
     >
       {isLoading ? (
         <>

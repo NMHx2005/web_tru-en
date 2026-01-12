@@ -10,7 +10,7 @@ interface PopupSupportContentProps {
 }
 
 export function PopupSupportContent({ onClose }: PopupSupportContentProps) {
-    const { data: page, isLoading, error } = usePage('popup-support');
+    const { data: page, isLoading, error } = usePage('ung-ho');
 
     if (isLoading) {
         return (

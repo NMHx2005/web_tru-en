@@ -88,8 +88,19 @@ export class StoriesService {
     }
 
     // Status filter
+    // For public users (no userId), never allow DRAFT status - always exclude it
     if (query.status) {
-      where.status = query.status as StoryStatus;
+      // If user is not authenticated and trying to query DRAFT, ignore it and exclude DRAFT
+      if (!userId && query.status === 'DRAFT') {
+        // Public users cannot access DRAFT stories - exclude them
+        where.isPublished = true;
+        where.status = {
+          not: StoryStatus.DRAFT,
+        };
+      } else {
+        // Allow status filter for authenticated users or non-DRAFT status for public
+        where.status = query.status as StoryStatus;
+      }
     } else {
       // Default: only show published stories (exclude drafts) for non-authors
       if (!userId) {
