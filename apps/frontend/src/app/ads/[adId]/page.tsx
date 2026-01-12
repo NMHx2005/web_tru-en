@@ -115,7 +115,7 @@ export default function AdPage() {
             <div className="md:ml-[120px] pb-16 md:pb-0">
                 <Header />
                 <main className="pt-2 md:pt-8 pb-6 md:pb-12 min-h-[calc(100vh-60px)]">
-                    <div className="max-w-xs sm:max-w-sm md:max-w-2xl lg:max-w-4xl mx-auto px-2 sm:px-3 md:px-4 lg:px-6">
+                    <div className="max-w-xs sm:max-w-sm md:max-w-lg lg:max-w-xl mx-auto px-2 sm:px-3 md:px-4 lg:px-6">
                         {/* Back Button - Return to chapter page */}
                         {(returnUrl || storySlug) && (
                             <div className="mb-6">
