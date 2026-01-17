@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import Script from 'next/script';
 import { Quicksand } from 'next/font/google';
 import './globals.css';
 import { ThemeProvider } from '@/components/providers/theme-provider';
@@ -93,6 +94,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning className={quicksand.variable}>
+      <Script
+        async
+        src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1741637952321960"
+        crossOrigin="anonymous"
+        strategy="afterInteractive"
+      />
       <body className={quicksand.className}>
         <ErrorBoundary>
           <QueryProvider>
